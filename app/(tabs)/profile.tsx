@@ -1,12 +1,30 @@
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
+import { signOut } from "firebase/auth";
+import { auth } from "../../lib/firebase";
+import { router } from "expo-router";
 
 export default function ProfileScreen() {
+  const onLogout = async () => {
+    await signOut(auth);
+    router.replace("/(auth)/login" as any);
+  };
+
   return (
     <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
       <Text style={{ fontSize: 28, fontWeight: "800" }}>Profile</Text>
-      <Text style={{ marginTop: 10, opacity: 0.8 }}>
-        Settings and user info will go here.
-      </Text>
+
+      <Pressable
+        onPress={onLogout}
+        style={{
+          marginTop: 24,
+          padding: 14,
+          borderRadius: 12,
+          backgroundColor: "black",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "white", fontWeight: "700" }}>Sign out</Text>
+      </Pressable>
     </View>
   );
 }
