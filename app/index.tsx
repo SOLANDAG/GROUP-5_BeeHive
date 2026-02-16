@@ -10,7 +10,7 @@ export default function WelcomeScreen() {
       </Text>
 
       <Pressable
-        onPress={() => router.push("/(auth)/login" as any)}
+        onPress={() => router.push("/(auth)/select-role" as any)}
         style={{
           marginTop: 24,
           padding: 14,

@@ -18,7 +18,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.replace("/(tabs)/home" as any);
+      router.replace("/(drawer)/(tabs)/home" as any);
     } catch (e: any) {
       Alert.alert("Login failed", e?.message ?? "Unknown error");
     } finally {
@@ -64,7 +64,7 @@ export default function LoginScreen() {
       </Pressable>
 
       <Pressable
-        onPress={() => router.push("/(auth)/signup" as any)}
+        onPress={() => router.push("/(auth)/select-role" as any)}
         style={{ marginTop: 12 }}
       >
         <Text style={{ textAlign: "center" }}>
