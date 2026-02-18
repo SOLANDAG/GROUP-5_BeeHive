@@ -1,78 +1,136 @@
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../../lib/firebase";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-
-type Role = "customer" | "provider" | "both";
+import { auth } from "@/lib/firebase";
+import { useTheme } from "@/lib/theme/ThemeProvider";
+import { useRouter } from "expo-router";
 
 export default function SignupScreen() {
-  const { role } = useLocalSearchParams<{ role?: Role }>();
+  const { theme } = useTheme();
+  const router = useRouter();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const onSignup = async () => {
-    if (!firstName || !lastName || !email || !password) {
-      Alert.alert("Missing info", "Please fill in all fields.");
+  const validatePassword = (pass: string) => {
+    return pass.length >= 6;
+  };
+
+  const handleSignup = async () => {
+    if (!email || !password) {
+      setError("All fields are required.");
       return;
     }
 
-    try {
-      setLoading(true);
-
-      const cred = await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
-      await setDoc(doc(db, "users", cred.user.uid), {
-        uid: cred.user.uid,
-        email: cred.user.email,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        username: "",
-        roles: {
-          customer: role === "customer" || role === "both",
-          provider: role === "provider" || role === "both",
-        },
-        createdAt: serverTimestamp(),
-      });
-
-      router.replace("/(drawer)/(tabs)/home" as any);
-    } catch (e: any) {
-      Alert.alert("Sign up failed", e?.message ?? "Unknown error");
-    } finally {
-      setLoading(false);
+    if (!validatePassword(password)) {
+      setError("Password must be at least 6 characters.");
+      return;
     }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      router.replace("/(auth)/select-role");
+    } catch (err: any) {
+      if (err.code === "auth/email-already-in-use") {
+        setError("Email already registered.");
+      } else {
+        setError("Signup failed. Try again.");
+      }
+    }
+
+    setLoading(false);
   };
 
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
-      <Text style={{ fontSize: 28, fontWeight: "800" }}>Sign up</Text>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: theme.colors.bg,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "Kyiv_700",
+          fontSize: 26,
+          marginBottom: 20,
+          color: theme.colors.text,
+        }}
+      >
+        Create Account
+      </Text>
 
-      <TextInput placeholder="First name" value={firstName} onChangeText={setFirstName} style={input} />
-      <TextInput placeholder="Last name" value={lastName} onChangeText={setLastName} style={input} />
-      <TextInput placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" style={input} />
-      <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry style={input} />
+      <TextInput
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        returnKeyType="next"
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+          fontFamily: "Kyiv_400",
+        }}
+      />
 
-      <Pressable onPress={onSignup} disabled={loading} style={[btn, { backgroundColor: loading ? "gray" : "black" }]}>
-        <Text style={{ color: "white", fontWeight: "700" }}>
-          {loading ? "Creating..." : "Create account"}
+      <TextInput
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        returnKeyType="done"
+        onSubmitEditing={handleSignup}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+          fontFamily: "Kyiv_400",
+        }}
+      />
+
+      {error ? (
+        <Text
+          style={{
+            color: "red",
+            marginBottom: 12,
+            fontFamily: "Kyiv_400",
+          }}
+        >
+          {error}
         </Text>
-      </Pressable>
+      ) : null}
 
-      <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
-        <Text style={{ textAlign: "center" }}>Back</Text>
+      <Pressable
+        onPress={handleSignup}
+        style={{
+          backgroundColor: theme.colors.primary,
+          padding: 16,
+          borderRadius: 16,
+          alignItems: "center",
+        }}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ fontFamily: "Kyiv_600", color: "#fff" }}>
+            Sign Up
+          </Text>
+        )}
       </Pressable>
     </View>
   );
 }
-
-const input = { marginTop: 12, borderWidth: 1, borderRadius: 12, padding: 12 };
-const btn = { marginTop: 16, padding: 14, borderRadius: 12, alignItems: "center" as const };

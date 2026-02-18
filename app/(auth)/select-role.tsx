@@ -1,47 +1,76 @@
 import { View, Text, Pressable } from "react-native";
-import { router } from "expo-router";
-
-type Role = "customer" | "provider" | "both";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { useTheme } from "@/lib/theme/ThemeProvider";
+import { useRouter } from "expo-router";
 
 export default function SelectRoleScreen() {
-  const goToSignup = (role: Role) => {
-    router.push({ pathname: "/(auth)/signup", params: { role } } as any);
+  const { theme } = useTheme();
+  const router = useRouter();
+
+  const saveRole = async (role: "customer" | "provider" | "both") => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const roles = {
+      customer: role === "customer" || role === "both",
+      provider: role === "provider" || role === "both",
+    };
+
+    await setDoc(
+      doc(db, "users", user.uid),
+      {
+        roles,
+        currentMode: "customer",
+      },
+      { merge: true }
+    );
+
+    router.replace("/(app)/home");
   };
 
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
-      <Text style={{ fontSize: 28, fontWeight: "800", textAlign: "center" }}>
-        How will you use BeeHive? 🐝
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: theme.colors.bg,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "Kyiv_700",
+          fontSize: 24,
+          marginBottom: 24,
+          color: theme.colors.text,
+        }}
+      >
+        Select Your Role
       </Text>
 
-      <Pressable style={btn} onPress={() => goToSignup("customer")}>
-        <Text style={txt}>I want to book services</Text>
-      </Pressable>
-
-      <Pressable style={btn} onPress={() => goToSignup("provider")}>
-        <Text style={txt}>I provide services</Text>
-      </Pressable>
-
-      <Pressable style={btn} onPress={() => goToSignup("both")}>
-        <Text style={txt}>I want to do both</Text>
-      </Pressable>
-
-      {/* Login option for existing users */}
-      <Pressable onPress={() => router.push("/(auth)/login" as any)} style={{ marginTop: 20 }}>
-        <Text style={{ textAlign: "center" }}>
-          Already have an account? <Text style={{ fontWeight: "700" }}>Login</Text>
-        </Text>
-      </Pressable>
+      {["customer", "provider", "both"].map((role) => (
+        <Pressable
+          key={role}
+          onPress={() => saveRole(role as any)}
+          style={{
+            backgroundColor: theme.colors.card,
+            padding: 18,
+            borderRadius: 16,
+            marginBottom: 12,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: "Kyiv_600",
+              fontSize: 16,
+              color: theme.colors.text,
+            }}
+          >
+            {role.toUpperCase()}
+          </Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
-
-const btn = {
-  marginTop: 16,
-  padding: 14,
-  borderRadius: 12,
-  backgroundColor: "black",
-  alignItems: "center" as const,
-};
-
-const txt = { color: "white", fontWeight: "700" as const };

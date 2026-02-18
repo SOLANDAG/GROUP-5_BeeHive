@@ -1,25 +1,79 @@
-import { View, Text, Pressable } from "react-native";
-import { router } from "expo-router";
+import { View, Text, Pressable, Image } from "react-native";
+import { useRouter } from "expo-router";
+import { useTheme } from "@/lib/theme/ThemeProvider";
 
-export default function WelcomeScreen() {
+export default function LandingScreen() {
+  const router = useRouter();
+  const { theme } = useTheme();
+
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
-      <Text style={{ fontSize: 32, fontWeight: "800" }}>BeeHive 🐝</Text>
-      <Text style={{ marginTop: 10, fontSize: 16, opacity: 0.8 }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.bg,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24,
+      }}
+    >
+      {/* Logo */}
+      <Image
+        source={require("@/app/assets/images/LOGO.png")}
+        style={{
+          width: 60,
+          height: 60,
+          marginBottom: 16,
+        }}
+        resizeMode="contain"
+      />
+
+      {/* App Name */}
+      <Text
+        style={{
+          fontFamily: "Fraunces_700",
+          fontSize: 32,
+          color: theme.colors.text,
+        }}
+      >
+        BeeHive
+      </Text>
+
+      {/* Subtitle */}
+      <Text
+        style={{
+          fontFamily: "Kyiv_400",
+          fontSize: 14,
+          marginTop: 8,
+          textAlign: "center",
+          color: theme.colors.text,
+          opacity: 0.7,
+        }}
+      >
         Your AI-assisted workspace for tasks, notes, and help.
       </Text>
 
+      {/* Button */}
       <Pressable
-        onPress={() => router.push("/(auth)/select-role" as any)}
+        onPress={() => router.push("/(auth)/login")}
         style={{
-          marginTop: 24,
-          padding: 14,
-          borderRadius: 12,
-          backgroundColor: "black",
+          marginTop: 40,
+          backgroundColor: theme.colors.primary,
+          paddingVertical: 16,
+          paddingHorizontal: 40,
+          borderRadius: 20,
+          width: "100%",
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "white", fontWeight: "700" }}>Get Started</Text>
+        <Text
+          style={{
+            fontFamily: "Kyiv_600",
+            color: "#fff",
+            fontSize: 16,
+          }}
+        >
+          Get Started
+        </Text>
       </Pressable>
     </View>
   );
