@@ -15,9 +15,27 @@ export type AppTheme = {
     primarySoft: string;
     text: string;
     border: string;
+
+    headerBg: string;
+    headerText: string;
+
+    tabActive: string;
+    tabInactive: string;
+
     iconInactive: string;
-    iconActive: string;
+
+    searchBg: string;
+    placeholder: string;
+
+    greetingQuestion: "#FFFFFF",
+
+    greetingTitle: string;
+    greetingName: string;
+    
+    textSecondary: "#888888",
+      
   };
+
   greetingImage: any;
 };
 
@@ -31,10 +49,28 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       primarySoft: "#FFE082",
       text: "#2D2A26",
       border: "#F0D9A7",
+
+      headerBg: "#FFF8E8",
+      headerText: "#2D2A26",
+
+      tabActive: "#F4B400",
+      tabInactive: "#A89C85",
+
       iconInactive: "#A89C85",
-      iconActive: "#F4B400",
+
+      searchBg: "rgba(255,255,255,0.95)",
+      placeholder: "#999",
+      
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#FFFFFF",
+      
+      textSecondary: "#888888",
+      
     },
-    greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
+
+    greetingImage: require("@/app/assets/images/bee.jpg"),
   },
 
   dark: {
@@ -46,25 +82,28 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       primarySoft: "#3A2F1A",
       text: "#FFFFFF",
       border: "#333",
-      iconInactive: "#777",
-      iconActive: "#F4B400",
-    },
-    greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
-  },
 
-  sunset: {
-    name: "Sunset",
-    colors: {
-      bg: "#FFF1F0",
-      card: "#FFFFFF",
-      primary: "#FF6F61",
-      primarySoft: "#FFC1B6",
-      text: "#3A2A28",
-      border: "#FFD3CD",
-      iconInactive: "#B88",
-      iconActive: "#FF6F61",
+      headerBg: "#1E1E1E",
+      headerText: "#FFFFFF",
+
+      tabActive: "#F4B400",
+      tabInactive: "#777",
+
+      iconInactive: "#777",
+
+      searchBg: "#2A2A2A",
+      placeholder: "#AAA",
+
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#F4B400",
+      
+      textSecondary: "#888888",
+      
     },
-    greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
+
+    greetingImage: require("@/app/assets/images/greysparkle.jpg"),
   },
 
   flower: {
@@ -72,14 +111,32 @@ export const THEMES: Record<ThemeType, AppTheme> = {
     colors: {
       bg: "#FFF6FB",
       card: "#FFFFFF",
-      primary: "#E91E63",
+      primary: "rgb(230, 44, 137)",
       primarySoft: "#F8BBD0",
       text: "#4A2A3C",
       border: "#FADADD",
-      iconInactive: "#C48",
-      iconActive: "#E91E63",
+
+      headerBg: "#FFF6FB",
+      headerText: "#4A2A3C",
+
+      tabActive: "rgb(230, 44, 137)",
+      tabInactive: "rgb(207, 121, 164)",
+
+      iconInactive: "rgb(207, 121, 164)",
+
+      searchBg: "#FFFFFF",
+      placeholder: "rgb(207, 121, 164)",
+
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#FFFFFF",
+
+      textSecondary: "#888888",
+      
     },
-    greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
+
+    greetingImage: require("@/app/assets/images/flowersbloom.jpg"),
   },
 
   ocean: {
@@ -91,9 +148,60 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       primarySoft: "#81D4FA",
       text: "#013A4A",
       border: "#B3E5FC",
+
+      headerBg: "#EAF6F9",
+      headerText: "#013A4A",
+
+      tabActive: "#0288D1",
+      tabInactive: "#4C7F8C",
+
       iconInactive: "#4C7F8C",
-      iconActive: "#0288D1",
+
+      searchBg: "#FFFFFF",
+      placeholder: "#4C7F8C",
+
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#FFFFFF",
+
+      textSecondary: "#888888",
+      
     },
+
+    greetingImage: require("@/app/assets/images/bluesparkle.jpg"),
+  },
+
+  sunset: {
+    name: "Sunset",
+    colors: {
+      bg: "#FFF1F0",
+      card: "#FFFFFF",
+      primary: "#FF6F61",
+      primarySoft: "#FFC1B6",
+      text: "#3A2A28",
+      border: "#FFD3CD",
+
+      headerBg: "#FFF1F0",
+      headerText: "#3A2A28",
+
+      tabActive: "#FF6F61",
+      tabInactive: "#B88",
+
+      iconInactive: "#B88",
+
+      searchBg: "#FFFFFF",
+      placeholder: "#B88",
+
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#FFFFFF",
+      
+      textSecondary: "#888888",
+
+    },
+
     greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
   },
 
@@ -106,9 +214,27 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       primarySoft: "#BFD7FF",
       text: "#111111",
       border: "#DDD",
+
+      headerBg: "#FFFFFF",
+      headerText: "#111111",
+
+      tabActive: "#005BBB",
+      tabInactive: "#777",
+
       iconInactive: "#777",
-      iconActive: "#005BBB",
+
+      searchBg: "#FFFFFF",
+      placeholder: "#555",
+
+      greetingQuestion: "#FFFFFF",
+
+      greetingTitle: "#FFFFFF",
+      greetingName: "#FFFFFF",
+      
+      textSecondary: "#888888",
+
     },
-    greetingImage: require("@/app/assets/images/pinksparkle.jpg"),
+
+    greetingImage: require("@/app/assets/images/bricks.jpg"),
   },
 };

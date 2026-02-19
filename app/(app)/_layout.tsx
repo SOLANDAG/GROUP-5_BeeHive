@@ -15,18 +15,23 @@ export default function AppLayout() {
         { backgroundColor: theme.colors.bg },
       ]}
     >
-      {/* HEADER */}
-      <AppHeader />
+      {/* MAIN CONTENT */}
+      <View style={{ flex: 1 }}>
+        <AppHeader />
 
-      {/* CONTENT */}
-      <View style={styles.content}>
-        <Stack screenOptions={{ headerShown: false }} />
+        <View style={{ flex: 1 }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "none",
+            }}
+          />
+        </View>
+
+        <AppFooter />
       </View>
 
-      {/* FOOTER */}
-      <AppFooter />
-
-      {/* SIDEBAR ON TOP OF EVERYTHING */}
+      {/* SIDEBAR MUST BE LAST */}
       <Sidebar />
     </View>
   );
@@ -34,10 +39,6 @@ export default function AppLayout() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-
-  content: {
     flex: 1,
   },
 });

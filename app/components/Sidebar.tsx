@@ -3,33 +3,27 @@ import {
   Text,
   Pressable,
   ScrollView,
+  StyleSheet,
+  Image,
   Animated,
   Dimensions,
-  StyleSheet,
 } from "react-native";
 import { useEffect, useRef } from "react";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { useRouter, usePathname } from "expo-router";
-import { FontAwesome5 } from "@expo/vector-icons";
-import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { useRoleContext } from "@/lib/auth/RoleProvider";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { useSidebar } from "@/lib/ui/SidebarContext";
+import { useRoleContext } from "@/lib/auth/RoleProvider";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 
 const { width } = Dimensions.get("window");
-const SIDEBAR_WIDTH = width * 0.78;
-
-type MenuItem = {
-  label: string;
-  route: string;
-  icon: string;
-};
+const SIDEBAR_WIDTH = width * 0.8;
 
 export default function Sidebar() {
   const { theme } = useTheme();
-  const { roles, currentMode, setCurrentMode } = useRoleContext();
   const { isOpen, closeSidebar } = useSidebar();
-
+  const { currentMode } = useRoleContext();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -38,7 +32,7 @@ export default function Sidebar() {
   useEffect(() => {
     Animated.timing(translateX, {
       toValue: isOpen ? 0 : -SIDEBAR_WIDTH,
-      duration: 260,
+      duration: 280,
       useNativeDriver: true,
     }).start();
   }, [isOpen]);
@@ -48,87 +42,55 @@ export default function Sidebar() {
     closeSidebar();
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    closeSidebar();
-    router.replace("/");
-  };
-
-  const renderItem = (item: MenuItem) => {
-    const active = pathname === item.route;
+  const renderItem = (label: string, route: string, icon: string) => {
+    const active = pathname.startsWith(route);
 
     return (
       <Pressable
-        key={item.route}
-        onPress={() => navigate(item.route)}
+        onPress={() => navigate(route)}
         style={[
           styles.item,
           {
-            backgroundColor: active ? theme.colors.primarySoft : "transparent",
+            backgroundColor: active
+              ? theme.colors.primarySoft
+              : "transparent",
           },
         ]}
       >
         <FontAwesome5
-          name={item.icon as any}
+          name={icon as any}
           size={16}
-          solid={active}
-          color={active ? theme.colors.primary : theme.colors.iconInactive}
-          style={{ width: 22, marginRight: 12 }}
+          color={
+            active
+              ? theme.colors.primary
+              : theme.colors.iconInactive
+          }
+          style={{ marginRight: 14 }}
         />
-
         <Text
-          style={{
-            fontFamily: "Kyiv_500",
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
+          style={[
+            styles.itemText,
+            {
+              color: active
+                ? theme.colors.primary
+                : theme.colors.text,
+            },
+          ]}
         >
-          {item.label}
+          {label}
         </Text>
       </Pressable>
     );
   };
 
-  // Sidebar menu matches your blueprint (and your actual existing routes)
-  // NOTE: Home is NOT here (Home is footer).
-  const customerMenu: MenuItem[] = [
-    { label: "Profile", route: "/(app)/profile", icon: "user" },
-    { label: "Settings", route: "/(app)/settings", icon: "cog" },
-    { label: "History", route: "/(app)/history", icon: "history" },
-    { label: "Favorites", route: "/(app)/favorites", icon: "heart" },
-
-    // Missing in your file list, so we add a placeholder screen: /(app)/payment
-    { label: "Payment Method", route: "/(app)/payment", icon: "credit-card" },
-
-    { label: "About BeeHive", route: "/(app)/about", icon: "info-circle" },
-    { label: "Help & Support", route: "/(app)/help", icon: "question-circle" },
-    { label: "Privacy Policy", route: "/(app)/privacy", icon: "shield-alt" },
-    { label: "Terms of Service", route: "/(app)/terms", icon: "file-contract" },
-  ];
-
-  const workerMenu: MenuItem[] = [
-    { label: "Profile", route: "/(app)/profile", icon: "user" },
-    { label: "Settings", route: "/(app)/settings", icon: "cog" },
-    { label: "History", route: "/(app)/history", icon: "history" },
-
-    // Missing in your file list, so we add a placeholder screen: /(app)/ratings
-    { label: "Ratings", route: "/(app)/ratings", icon: "star" },
-
-    { label: "My Services", route: "/(app)/my-services", icon: "briefcase" },
-    { label: "Availability", route: "/(app)/availability", icon: "calendar" },
-
-    // Earnings exists in your file list
-    { label: "Earnings", route: "/(app)/earnings", icon: "wallet" },
-
-    { label: "About BeeHive", route: "/(app)/about", icon: "info-circle" },
-    { label: "Help & Support", route: "/(app)/help", icon: "question-circle" },
-    { label: "Privacy Policy", route: "/(app)/privacy", icon: "shield-alt" },
-    { label: "Terms of Service", route: "/(app)/terms", icon: "file-contract" },
-  ];
-
   return (
     <>
-      {isOpen && <Pressable onPress={closeSidebar} style={styles.backdrop} />}
+      {isOpen && (
+        <Pressable
+          style={styles.backdrop}
+          onPress={closeSidebar}
+        />
+      )}
 
       <Animated.View
         style={[
@@ -142,68 +104,147 @@ export default function Sidebar() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
-            paddingTop: 76,
-            paddingHorizontal: 18,
-            paddingBottom: 40,
+            padding: 20,
+            paddingTop: 60,
           }}
         >
-          <Text
-            style={{
-              fontFamily: "Kyiv_700",
-              fontSize: 14,
-              color: theme.colors.mutedText,
-              marginBottom: 10,
-              letterSpacing: 0.4,
-            }}
+          {/* CLOSE ARROW */}
+          <Pressable onPress={closeSidebar}>
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={theme.colors.text}
+            />
+          </Pressable>
+
+          <View style={{ height: 20 }} />
+
+          {/* PROFILE SECTION */}
+          <Pressable
+            onPress={() => navigate("/(app)/profile")}
+            style={styles.profileContainer}
           >
-            MENU
-          </Text>
-
-          {currentMode === "customer" && customerMenu.map(renderItem)}
-          {currentMode === "provider" && workerMenu.map(renderItem)}
-
-          {/* Switch mode (only if user can be provider too) */}
-          {roles.provider && (
-            <Pressable
-              onPress={() =>
-                setCurrentMode(currentMode === "customer" ? "provider" : "customer")
+            <Image
+              source={
+                auth.currentUser?.photoURL
+                  ? { uri: auth.currentUser.photoURL }
+                  : require("@/app/assets/images/profile.jpg")
               }
-              style={[
-                styles.switchBtn,
-                { backgroundColor: theme.colors.primarySoft },
-              ]}
-            >
-              <FontAwesome5
-                name="exchange-alt"
-                size={14}
-                color={theme.colors.primary}
-                style={{ marginRight: 10 }}
-              />
-              <Text
-                style={{
-                  fontFamily: "Kyiv_600",
-                  color: theme.colors.text,
-                  fontSize: 13,
-                }}
-              >
-                Switch to {currentMode === "customer" ? "Provider" : "Customer"} Mode
-              </Text>
-            </Pressable>
-          )}
+              style={styles.profileImage}
+            />
 
-          {/* Logout */}
-          <Pressable onPress={handleLogout} style={{ marginTop: 20 }}>
-            <View style={styles.logoutRow}>
-              <FontAwesome5
-                name="sign-out-alt"
-                size={16}
-                color="#E53935"
-                style={{ width: 22, marginRight: 12 }}
-              />
-              <Text style={{ fontFamily: "Kyiv_600", color: "#E53935" }}>
-                Logout
+            <View style={styles.profileTextWrapper}>
+              <Text
+                style={[
+                  styles.username,
+                  { color: theme.colors.text },
+                ]}
+              >
+                {auth.currentUser?.displayName || "Guest"}
+              </Text>
+
+              <Text
+                style={[
+                  styles.email,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {auth.currentUser?.email || "guest@email.com"}
               </Text>
             </View>
+          </Pressable>
+
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: theme.colors.border },
+            ]}
+          />
+
+          {/* MAIN LINKS */}
+          {renderItem("Profile", "/(app)/profile", "user")}
+          {renderItem("Settings", "/(app)/settings", "cog")}
+
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: theme.colors.border },
+            ]}
+          />
+
+          {currentMode === "customer" && (
+            <>
+              {renderItem("Favorites", "/(app)/favorites", "heart")}
+              {renderItem(
+                "Payment Method",
+                "/(app)/payment",
+                "credit-card"
+              )}
+            </>
+          )}
+
+          {currentMode === "provider" && (
+            <>
+              {renderItem("Ratings", "/(app)/ratings", "star")}
+              {renderItem(
+                "My Services",
+                "/(app)/my-services",
+                "briefcase"
+              )}
+              {renderItem(
+                "Availability",
+                "/(app)/availability",
+                "calendar"
+              )}
+              {renderItem(
+                "Earnings",
+                "/(app)/earnings",
+                "wallet"
+              )}
+            </>
+          )}
+
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: theme.colors.border },
+            ]}
+          />
+
+          {renderItem("About BeeHive", "/(app)/about", "info-circle")}
+          {renderItem("Help & Support", "/(app)/help", "question-circle")}
+          {renderItem("Privacy Policy", "/(app)/privacy", "shield-alt")}
+          {renderItem("Terms of Service", "/(app)/terms", "file-contract")}
+
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: theme.colors.border },
+            ]}
+          />
+
+          {/* LOGOUT */}
+          <Pressable
+            onPress={async () => {
+              await signOut(auth);
+              router.replace("/");
+            }}
+            style={styles.item}
+          >
+            <FontAwesome5
+              name="sign-out-alt"
+              size={16}
+              color="#E53935"
+              style={{ marginRight: 14 }}
+            />
+            <Text
+              style={[
+                styles.itemText,
+                { color: "#E53935" },
+              ]}
+            >
+              Logout
+            </Text>
           </Pressable>
         </ScrollView>
       </Animated.View>
@@ -214,47 +255,66 @@ export default function Sidebar() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 0,
     top: 0,
     bottom: 0,
+    left: 0,
     width: SIDEBAR_WIDTH,
     zIndex: 1000,
     elevation: 30,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 6, height: 0 },
   },
+
   backdrop: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     zIndex: 999,
   },
+
+  profileContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+
+  profileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+
+  profileTextWrapper: {
+    marginLeft: 14,
+  },
+
+  username: {
+    fontSize: 18,
+    fontFamily: "Kyiv_400",
+  },
+
+  email: {
+    fontSize: 13,
+    fontFamily: "Kyiv_400",
+    marginTop: 2,
+  },
+
   item: {
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: 25,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  switchBtn: {
-    marginTop: 16,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
+
+  itemText: {
+    fontFamily: "Kyiv_500",
   },
-  logoutRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
+
+  divider: {
+    height: 1,
+    marginVertical: 14,
   },
 });

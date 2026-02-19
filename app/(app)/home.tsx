@@ -1,342 +1,293 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   Animated,
   ImageBackground,
-  TextInput,
   StyleSheet,
-  ActivityIndicator,
+  TextInput,
   Dimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme/ThemeProvider";
+import { auth } from "@/lib/firebase";
 
 const { width } = Dimensions.get("window");
 
-const GREETING_EXPANDED_HEIGHT = 240;
-const GREETING_COLLAPSED_HEIGHT = 100;
-const SCROLL_DISTANCE =
-  GREETING_EXPANDED_HEIGHT - GREETING_COLLAPSED_HEIGHT;
+const HEADER_MAX_HEIGHT = 220;
+const HEADER_MIN_HEIGHT = 105;
 
-export default function HomeScreen() {
+export default function Home() {
   const { theme } = useTheme();
-  const [displayName, setDisplayName] =
-    useState<string>("");
-  const [loading, setLoading] =
-    useState<boolean>(true);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
-  const scrollY = useRef(
-    new Animated.Value(0)
-  ).current;
+  const [typedText, setTypedText] = useState("");
+  const [showTyping, setShowTyping] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      const user = auth.currentUser;
+  const fullText = "How can BeeHive assist you today?";
+  const username = auth.currentUser?.displayName || "Guest";
 
-      if (!user) {
-        setLoading(false);
-        router.replace("/(auth)/login" as any);
-        return;
-      }
-
-      try {
-        const snap = await getDoc(
-          doc(db, "users", user.uid)
-        );
-        const data = snap.data() as any;
-
-        const name =
-          (data?.username &&
-            data.username.trim()) ||
-          (data?.firstName &&
-            data.firstName.trim()) ||
-          user.email ||
-          "there";
-
-        setDisplayName(name);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  const animatedHeight = scrollY.interpolate({
-    inputRange: [0, SCROLL_DISTANCE],
-    outputRange: [
-      GREETING_EXPANDED_HEIGHT,
-      GREETING_COLLAPSED_HEIGHT,
-    ],
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
     extrapolate: "clamp",
   });
 
   const greetingOpacity = scrollY.interpolate({
-    inputRange: [0, SCROLL_DISTANCE * 0.6],
+    inputRange: [0, 60],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
-  const greetingTranslate = scrollY.interpolate({
-    inputRange: [0, SCROLL_DISTANCE],
-    outputRange: [0, -20],
-    extrapolate: "clamp",
-  });
+    useEffect(() => {
+      let timeout: any;
+      let hasTyped = false;
 
-  if (loading) {
+      const listener = scrollY.addListener(({ value }) => {
+        if (value > 60 && !hasTyped) {
+          hasTyped = true;
+
+          let i = 0;
+
+          const typeNext = () => {
+            if (i <= fullText.length) {
+              setTypedText(fullText.slice(0, i));
+              i++;
+              timeout = setTimeout(typeNext, 40);
+            }
+          };
+
+          typeNext();
+        }
+
+        if (value <= 60) {
+          hasTyped = false;
+          setTypedText("");
+        }
+      });
+
+      return () => {
+        scrollY.removeListener(listener);
+        if (timeout) clearTimeout(timeout);
+      };
+    }, [scrollY]);
+
+  const renderTypedText = () => {
+    const beeIndex = typedText.indexOf("BeeHive");
+
+    if (beeIndex === -1) {
+      return (
+        <Text style={{ color: theme.colors.greetingQuestion }}>
+          {typedText}
+        </Text>
+      );
+    }
+
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          backgroundColor:
-            theme.colors.bg,
-        }}
-      >
-        <ActivityIndicator />
-      </View>
+      <>
+        <Text style={{ color: theme.colors.greetingQuestion }}>
+          {typedText.slice(0, beeIndex)}
+        </Text>
+
+        <Text style={{ color: theme.colors.primary }}>
+          {typedText.slice(beeIndex, beeIndex + 7)}
+        </Text>
+
+        <Text style={{ color: theme.colors.greetingQuestion }}>
+          {typedText.slice(beeIndex + 7)}
+        </Text>
+      </>
     );
-  }
+  };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor:
-          theme.colors.bg,
-      }}
-    >
-      <Animated.ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [
-            {
-              nativeEvent: {
-                contentOffset: {
-                  y: scrollY,
-                },
-              },
-            },
-          ],
-          { useNativeDriver: false }
-        )}
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      {/* HEADER CARD */}
+      <Animated.View
+        style={[
+          styles.headerCard,
+          {
+            height: headerHeight,
+            shadowColor: theme.colors.text,
+          },
+        ]}
       >
-        {/* SHADOW WRAPPER */}
-        <View style={styles.shadowWrapper}>
+        <ImageBackground
+          source={theme.greetingImage}
+          style={styles.imageBackground}
+        >
+          <LinearGradient
+            colors={["rgba(20,11,2,0.75)", "transparent"]}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0, y: 0 }}
+            style={styles.gradient}
+          />
+
+          {/* GREETING */}
           <Animated.View
-            style={{
-              height: animatedHeight,
-              overflow: "hidden",
-            }}
+            style={[
+              styles.greetingWrapper,
+              { opacity: greetingOpacity },
+            ]}
           >
-            <ImageBackground
-              source={
-                theme.greetingImage
-              }
-              resizeMode="cover"
-              style={
-                styles.imageBackground
-              }
+            <Text
+              style={[
+                styles.welcomeText,
+                { color: theme.colors.greetingTitle },
+              ]}
             >
-              {/* Right Gradient */}
-              <LinearGradient
-                colors={[
-                  "rgba(0,0,0,0.55)",
-                  "transparent",
-                ]}
-                start={{ x: 1, y: 0 }}
-                end={{ x: 0, y: 0 }}
-                style={
-                  styles.gradientOverlay
-                }
+              Welcome,
+            </Text>
+
+            <Text
+              style={[
+                styles.usernameText,
+                { color: theme.colors.greetingName },
+              ]}
+            >
+              {username}
+            </Text>
+          </Animated.View>
+
+          {/* TYPED QUESTION (HANDYCART EXACT LOGIC) */}
+          {typedText.length > 0 && (
+            <Text style={styles.typedText}>
+              {renderTypedText()}
+            </Text>
+          )}
+
+          {showTyping && (
+            <Text style={styles.typedText}>
+              {renderTypedText()}
+            </Text>
+          )}
+
+          {/* SEARCH BAR */}
+          <View style={styles.searchWrapper}>
+            <View
+              style={[
+                styles.searchContainer,
+                { backgroundColor: theme.colors.searchBg },
+              ]}
+            >
+              <Ionicons
+                name="search"
+                size={28}
+                color={theme.colors.iconInactive}
+                style={{ marginRight: 8 }}
               />
 
-              {/* Greeting */}
-              <Animated.View
+              <TextInput
+                placeholder="Search"
+                placeholderTextColor={theme.colors.placeholder}
                 style={[
-                  styles.greetingContainer,
-                  {
-                    opacity:
-                      greetingOpacity,
-                    transform: [
-                      {
-                        translateY:
-                          greetingTranslate,
-                      },
-                    ],
-                  },
+                  styles.searchInput,
+                  { color: theme.colors.text },
                 ]}
-              >
-                <Text
-                  style={
-                    styles.welcomeText
-                  }
-                >
-                  Welcome,
-                </Text>
-                <Text
-                  style={styles.nameText}
-                >
-                  {displayName}
-                </Text>
-              </Animated.View>
+              />
+            </View>
+          </View>
+        </ImageBackground>
+      </Animated.View>
 
-              {/* Search Pill */}
-              <View
-                style={
-                  styles.searchWrapper
-                }
-              >
-                <View
-                  style={
-                    styles.searchContainer
-                  }
-                >
-                  <TextInput
-                    placeholder="Search for a service..."
-                    placeholderTextColor="#999"
-                    style={
-                      styles.searchInput
-                    }
-                  />
-                </View>
-              </View>
-            </ImageBackground>
-          </Animated.View>
-        </View>
-
-        {/* TEMP CONTENT */}
-        <View
-          style={{
-            padding: 24,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 20,
-              fontFamily:
-                "Kyiv_600",
-              marginBottom: 16,
-              color:
-                theme.colors.text,
-            }}
-          >
-            Recommended for you
-          </Text>
-
-          {Array.from({
-            length: 8,
-          }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.demoCard,
-                {
-                  backgroundColor:
-                    theme.colors.card,
-                },
-              ]}
-            />
-          ))}
-
+      {/* SCROLL AREA */}
+      <Animated.ScrollView
+        contentContainerStyle={{ padding: 20 }}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+        {Array.from({ length: 12 }).map((_, i) => (
           <View
-            style={{ height: 100 }}
+            key={i}
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+              },
+            ]}
           />
-        </View>
+        ))}
       </Animated.ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  shadowWrapper: {
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
+  headerCard: {
+    overflow: "hidden",
+    elevation: 10,
     shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 10,
-    backgroundColor:
-      "transparent",
   },
 
   imageBackground: {
     flex: 1,
-    justifyContent:
-      "center",
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
 
-  gradientOverlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    left: 0,
+  gradient: {
+    ...StyleSheet.absoluteFillObject,
   },
 
-  greetingContainer: {
-    position: "absolute",
-    top: 60,
-    right: 24,
-    alignItems:
-      "flex-end",
-    maxWidth:
-      width * 0.65,
+  greetingWrapper: {
+    zIndex: 1,
+    marginBottom: 50,
+    alignItems: "flex-end",
   },
 
   welcomeText: {
-    fontSize: 26,
-    fontFamily:
-      "Fraunces_600",
-    color: "white",
+    fontSize: 38,
+    fontFamily: "Fraunces_600",
   },
 
-  nameText: {
-    fontSize: 32,
-    fontFamily:
-      "Fraunces_700",
-    color: "white",
+  usernameText: {
+    fontSize: 40,
+    fontFamily: "Fraunces_700",
+  },
+
+  typedText: {
+    position: "absolute",
+    bottom: 65,
+    left: 20,
+    right: 20,
+    fontSize: 20,
+    fontFamily: "Fraunces_500",
+    zIndex: 3,
   },
 
   searchWrapper: {
     position: "absolute",
-    bottom: 20,
-    left: 0,
-    right: 0,
-    alignItems:
-      "center",
+    bottom: 10,
+    left: 15,
+    right: 15,
+    zIndex: 2,
   },
 
   searchContainer: {
-    width:
-      width * 0.88,
-    backgroundColor:
-      "rgba(255,255,255,0.95)",
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 50,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
 
   searchInput: {
+    flex: 1,
     fontSize: 16,
-    fontFamily:
-      "Kyiv_400",
-    color: "#222",
+    fontFamily: "Kyiv_400",
   },
 
-  demoCard: {
-    height: 120,
-    borderRadius: 20,
-    marginBottom: 16,
+  card: {
+    height: 100,
+    borderWidth: 1,
+    borderRadius: 18,
+    marginBottom: 15,
   },
 });

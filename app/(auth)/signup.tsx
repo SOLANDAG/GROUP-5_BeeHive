@@ -74,6 +74,7 @@ export default function SignupScreen() {
 
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#464646"
         value={email}
         onChangeText={setEmail}
         returnKeyType="next"
@@ -88,6 +89,7 @@ export default function SignupScreen() {
 
       <TextInput
         placeholder="Password"
+        placeholderTextColor="#464646"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -126,7 +128,7 @@ export default function SignupScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={{ fontFamily: "Kyiv_600", color: "#fff" }}>
+          <Text style={{ fontFamily: "Kyiv_300", color: "#fff" }}>
             Sign Up
           </Text>
         )}

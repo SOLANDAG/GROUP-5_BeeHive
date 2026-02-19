@@ -54,7 +54,7 @@ export default function SelectRoleScreen() {
           key={role}
           onPress={() => saveRole(role as any)}
           style={{
-            backgroundColor: theme.colors.card,
+            backgroundColor: theme.colors.primarySoft,
             padding: 18,
             borderRadius: 16,
             marginBottom: 12,
@@ -62,9 +62,9 @@ export default function SelectRoleScreen() {
         >
           <Text
             style={{
-              fontFamily: "Kyiv_600",
+              fontFamily: "Kyiv_500",
               fontSize: 16,
-              color: theme.colors.text,
+              color: theme.colors.headerText,
             }}
           >
             {role.toUpperCase()}

@@ -137,7 +137,7 @@ export default function LoginScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={{ fontFamily: "Kyiv_600", color: "#fff" }}>
+          <Text style={{ fontFamily: "Kyiv_300", color: "#fff" }}>
             Login
           </Text>
         )}

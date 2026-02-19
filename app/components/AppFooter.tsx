@@ -35,7 +35,7 @@ export default function AppFooter() {
       ]}
     >
       {items.map((item) => {
-        const active = pathname === item.route;
+        const active = pathname.includes(item.route.split("/").pop()!);
 
         return (
           <Pressable
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     paddingVertical: 12,
-    paddingBottom: 28, // comfy iPhone safe-ish padding
+    paddingBottom: 40,
     borderTopWidth: 1,
   },
   item: {

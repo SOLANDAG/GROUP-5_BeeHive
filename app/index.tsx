@@ -67,7 +67,7 @@ export default function LandingScreen() {
       >
         <Text
           style={{
-            fontFamily: "Kyiv_600",
+            fontFamily: "Kyiv_300",
             color: "#fff",
             fontSize: 16,
           }}
