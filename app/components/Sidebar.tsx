@@ -17,12 +17,14 @@ import { useRoleContext } from "@/lib/auth/RoleProvider";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 
+import { PanGestureHandler } from "react-native-gesture-handler";
+
 const { width } = Dimensions.get("window");
 const SIDEBAR_WIDTH = width * 0.8;
 
 export default function Sidebar() {
   const { theme } = useTheme();
-  const { isOpen, closeSidebar } = useSidebar();
+  const { isOpen, closeSidebar, openSidebar } = useSidebar();
   const { currentMode } = useRoleContext();
   const router = useRouter();
   const pathname = usePathname();
@@ -37,13 +39,33 @@ export default function Sidebar() {
     }).start();
   }, [isOpen]);
 
+  const handleGesture = (event: any) => {
+    let drag = event.nativeEvent.translationX;
+
+    if (drag > 0) {
+      translateX.setValue(Math.min(drag - SIDEBAR_WIDTH, 0));
+    }
+  };
+
+  const handleGestureEnd = (event: any) => {
+    const drag = event.nativeEvent.translationX;
+
+    if (drag > SIDEBAR_WIDTH / 3) {
+      openSidebar();
+    } else {
+      closeSidebar();
+    }
+  };
+
   const navigate = (route: string) => {
     router.push(route as any);
     closeSidebar();
   };
 
   const renderItem = (label: string, route: string, icon: string) => {
-    const active = pathname.startsWith(route);
+    const currentScreen = pathname.split("/").pop();
+    const targetScreen = route.split("/").pop();
+    const active = currentScreen === targetScreen;
 
     return (
       <Pressable
@@ -92,162 +114,163 @@ export default function Sidebar() {
         />
       )}
 
-      <Animated.View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.colors.card,
-            transform: [{ translateX }],
-          },
-        ]}
+      <PanGestureHandler
+        onGestureEvent={handleGesture}
+        onEnded={handleGestureEnd}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            padding: 20,
-            paddingTop: 60,
-          }}
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              backgroundColor: theme.colors.card,
+              transform: [{ translateX }],
+            },
+          ]}
         >
-          {/* CLOSE ARROW */}
-          <Pressable onPress={closeSidebar}>
-            <Ionicons
-              name="chevron-back"
-              size={24}
-              color={theme.colors.text}
-            />
-          </Pressable>
-
-          <View style={{ height: 20 }} />
-
-          {/* PROFILE SECTION */}
-          <Pressable
-            onPress={() => navigate("/(app)/profile")}
-            style={styles.profileContainer}
-          >
-            <Image
-              source={
-                auth.currentUser?.photoURL
-                  ? { uri: auth.currentUser.photoURL }
-                  : require("@/app/assets/images/profile.jpg")
-              }
-              style={styles.profileImage}
-            />
-
-            <View style={styles.profileTextWrapper}>
-              <Text
-                style={[
-                  styles.username,
-                  { color: theme.colors.text },
-                ]}
-              >
-                {auth.currentUser?.displayName || "Guest"}
-              </Text>
-
-              <Text
-                style={[
-                  styles.email,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                {auth.currentUser?.email || "guest@email.com"}
-              </Text>
-            </View>
-          </Pressable>
-
-          <View
-            style={[
-              styles.divider,
-              { backgroundColor: theme.colors.border },
-            ]}
-          />
-
-          {/* MAIN LINKS */}
-          {renderItem("Profile", "/(app)/profile", "user")}
-          {renderItem("Settings", "/(app)/settings", "cog")}
-
-          <View
-            style={[
-              styles.divider,
-              { backgroundColor: theme.colors.border },
-            ]}
-          />
-
-          {currentMode === "customer" && (
-            <>
-              {renderItem("Favorites", "/(app)/favorites", "heart")}
-              {renderItem(
-                "Payment Method",
-                "/(app)/payment",
-                "credit-card"
-              )}
-            </>
-          )}
-
-          {currentMode === "provider" && (
-            <>
-              {renderItem("Ratings", "/(app)/ratings", "star")}
-              {renderItem(
-                "My Services",
-                "/(app)/my-services",
-                "briefcase"
-              )}
-              {renderItem(
-                "Availability",
-                "/(app)/availability",
-                "calendar"
-              )}
-              {renderItem(
-                "Earnings",
-                "/(app)/earnings",
-                "wallet"
-              )}
-            </>
-          )}
-
-          <View
-            style={[
-              styles.divider,
-              { backgroundColor: theme.colors.border },
-            ]}
-          />
-
-          {renderItem("About BeeHive", "/(app)/about", "info-circle")}
-          {renderItem("Help & Support", "/(app)/help", "question-circle")}
-          {renderItem("Privacy Policy", "/(app)/privacy", "shield-alt")}
-          {renderItem("Terms of Service", "/(app)/terms", "file-contract")}
-
-          <View
-            style={[
-              styles.divider,
-              { backgroundColor: theme.colors.border },
-            ]}
-          />
-
-          {/* LOGOUT */}
-          <Pressable
-            onPress={async () => {
-              await signOut(auth);
-              router.replace("/");
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              padding: 20,
+              paddingTop: 60,
             }}
-            style={styles.item}
           >
-            <FontAwesome5
-              name="sign-out-alt"
-              size={16}
-              color="#E53935"
-              style={{ marginRight: 14 }}
-            />
-            <Text
-              style={[
-                styles.itemText,
-                { color: "#E53935" },
-              ]}
+            <Pressable onPress={closeSidebar}>
+              <Ionicons
+                name="chevron-back"
+                size={24}
+                color={theme.colors.text}
+              />
+            </Pressable>
+
+            <View style={{ height: 20 }} />
+
+            <Pressable
+              onPress={() => navigate("/(app)/profile")}
+              style={styles.profileContainer}
             >
-              Logout
-            </Text>
-          </Pressable>
-        </ScrollView>
-      </Animated.View>
+              <Image
+                source={
+                  auth.currentUser?.photoURL
+                    ? { uri: auth.currentUser.photoURL }
+                    : require("@/app/assets/images/profile.jpg")
+                }
+                style={styles.profileImage}
+              />
+
+              <View style={styles.profileTextWrapper}>
+                <Text
+                  style={[
+                    styles.username,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {auth.currentUser?.displayName || "Guest"}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.email,
+                    { color: theme.colors.placeholder },
+                  ]}
+                >
+                  {auth.currentUser?.email || "guest@email.com"}
+                </Text>
+              </View>
+            </Pressable>
+
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: theme.colors.border },
+              ]}
+            />
+
+            {renderItem("Profile", "/(app)/profile", "user")}
+            {renderItem("Settings", "/(app)/settings", "cog")}
+
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: theme.colors.border },
+              ]}
+            />
+
+            {currentMode === "customer" && (
+              <>
+                {renderItem("Favorites", "/(app)/favorites", "heart")}
+                {renderItem(
+                  "Payment Method",
+                  "/(app)/payment",
+                  "credit-card"
+                )}
+              </>
+            )}
+
+            {currentMode === "provider" && (
+              <>
+                {renderItem("Ratings", "/(app)/ratings", "star")}
+                {renderItem(
+                  "My Services",
+                  "/(app)/my-services",
+                  "briefcase"
+                )}
+                {renderItem(
+                  "Availability",
+                  "/(app)/availability",
+                  "calendar"
+                )}
+                {renderItem(
+                  "Earnings",
+                  "/(app)/earnings",
+                  "wallet"
+                )}
+              </>
+            )}
+
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: theme.colors.border },
+              ]}
+            />
+
+            {renderItem("About BeeHive", "/(app)/about", "info-circle")}
+            {renderItem("Help & Support", "/(app)/help", "question-circle")}
+            {renderItem("Privacy Policy", "/(app)/privacy", "shield-alt")}
+            {renderItem("Terms of Service", "/(app)/terms", "file-contract")}
+
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: theme.colors.border },
+              ]}
+            />
+
+            <Pressable
+              onPress={async () => {
+                await signOut(auth);
+                router.replace("/");
+              }}
+              style={styles.item}
+            >
+              <FontAwesome5
+                name="sign-out-alt"
+                size={16}
+                color="#E53935"
+                style={{ marginRight: 14 }}
+              />
+              <Text
+                style={[
+                  styles.itemText,
+                  { color: "#E53935" },
+                ]}
+              >
+                Logout
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </Animated.View>
+      </PanGestureHandler>
     </>
   );
 }

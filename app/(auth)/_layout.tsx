@@ -6,9 +6,9 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         animation: "none",
+        gestureEnabled: false,
       }}
     >
-      <Stack.Screen name="select-role" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="login" />
     </Stack>

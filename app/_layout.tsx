@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import AppProviders from "@/lib/providers/AppProviders";
 import { useFonts } from "expo-font";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import {
   Fraunces_500Medium,
@@ -21,6 +22,7 @@ export default function RootLayout() {
     Kyiv_300: require("./assets/fonts/KyivTypeSans-Light.otf"),
     Kyiv_400: require("./assets/fonts/KyivTypeSans-Regular.otf"),
     Kyiv_500: require("./assets/fonts/KyivTypeSans-Medium.otf"),
+    Kyiv_600: require("./assets/fonts/KyivTypeSans-Light.otf"),
     Kyiv_700: require("./assets/fonts/KyivTypeSans-Bold.otf"),
     Kyiv_900: require("./assets/fonts/KyivTypeSans-Black.otf"),
 
@@ -30,17 +32,20 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AppProviders>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: "none",
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-      </Stack>
-    </AppProviders>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppProviders>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "none",
+            gestureEnabled: false
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(app)" />
+        </Stack>
+      </AppProviders>
+    </GestureHandlerRootView>
   );
 }

@@ -5,35 +5,51 @@ import AppHeader from "@/app/components/AppHeader";
 import AppFooter from "@/app/components/AppFooter";
 import Sidebar from "@/app/components/Sidebar";
 
+import { PanGestureHandler } from "react-native-gesture-handler";
+import { useSidebar } from "@/lib/ui/SidebarContext";
+
 export default function AppLayout() {
   const { theme } = useTheme();
+  const { openSidebar } = useSidebar();
+
+  const handleSwipe = (event: any) => {
+    const { translationX } = event.nativeEvent;
+
+    // Swipe right enough distance
+    if (translationX > 80) {
+      openSidebar();
+    }
+  };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.bg },
-      ]}
-    >
-      {/* MAIN CONTENT */}
-      <View style={{ flex: 1 }}>
-        <AppHeader />
-
+    <PanGestureHandler onEnded={handleSwipe}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: theme.colors.bg },
+        ]}
+      >
+        {/* MAIN CONTENT */}
         <View style={{ flex: 1 }}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "none",
-            }}
-          />
+          <AppHeader />
+
+          <View style={{ flex: 1 }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+                gestureEnabled: false,
+              }}
+            />
+          </View>
+
+          <AppFooter />
         </View>
 
-        <AppFooter />
+        {/* SIDEBAR MUST BE LAST */}
+        <Sidebar />
       </View>
-
-      {/* SIDEBAR MUST BE LAST */}
-      <Sidebar />
-    </View>
+    </PanGestureHandler>
   );
 }
 

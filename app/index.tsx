@@ -1,10 +1,20 @@
 import { View, Text, Pressable, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme/ThemeProvider";
+import { useEffect } from "react";
+import { auth } from "@/lib/firebase";
 
 export default function LandingScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+
+  useEffect(() => {
+  const user = auth.currentUser;
+
+    if (user) {
+      router.replace("/(app)/home");
+    }
+  }, []);
 
   return (
     <View

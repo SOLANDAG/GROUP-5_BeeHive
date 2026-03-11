@@ -10,6 +10,8 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { useRouter } from "expo-router";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function SignupScreen() {
   const { theme } = useTheme();
@@ -39,10 +41,23 @@ export default function SignupScreen() {
     setError("");
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      router.replace("/(auth)/select-role");
-    } catch (err: any) {
-      if (err.code === "auth/email-already-in-use") {
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
+
+        const user = credential.user;
+
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          roles: {
+            customer: true,
+            provider: false,
+          },
+          currentMode: "customer",
+          createdAt: new Date()
+        });
+
+        router.replace("/(app)/home");
+      } catch (err: any) {
+            if (err.code === "auth/email-already-in-use") {
         setError("Email already registered.");
       } else {
         setError("Signup failed. Try again.");
@@ -74,33 +89,40 @@ export default function SignupScreen() {
 
       <TextInput
         placeholder="Email"
-        placeholderTextColor="#464646"
+        placeholderTextColor={theme.colors.placeholder}
         value={email}
         onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
         returnKeyType="next"
+        selectionColor={theme.colors.primary}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
           borderRadius: 16,
           marginBottom: 12,
           fontFamily: "Kyiv_400",
+          color: theme.colors.text,
         }}
       />
 
       <TextInput
         placeholder="Password"
-        placeholderTextColor="#464646"
+        placeholderTextColor={theme.colors.placeholder}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+        autoCapitalize="none"
         returnKeyType="done"
         onSubmitEditing={handleSignup}
+        selectionColor={theme.colors.primary}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
           borderRadius: 16,
           marginBottom: 12,
           fontFamily: "Kyiv_400",
+          color: theme.colors.text,
         }}
       />
 
@@ -128,10 +150,18 @@ export default function SignupScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={{ fontFamily: "Kyiv_300", color: "#fff" }}>
-            Sign Up
-          </Text>
+          <Text style={{ fontFamily: "Kyiv_300", color: "#fff" }}>Sign Up</Text>
         )}
+      </Pressable>
+
+      {/* Return to Login */}
+      <Pressable
+        onPress={() => router.replace("/(auth)/login")}
+        style={{ marginTop: 16, alignItems: "center" }}
+      >
+        <Text style={{ fontFamily: "Kyiv_500", color: theme.colors.primary }}>
+          ← Return to Login
+        </Text>
       </Pressable>
     </View>
   );

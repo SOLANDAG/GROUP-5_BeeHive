@@ -3,7 +3,10 @@ import React, {
   useContext,
   useState,
   useMemo,
+  useEffect,
 } from "react";
+
+import { usePathname } from "expo-router";
 
 type SidebarContextType = {
   isOpen: boolean;
@@ -21,15 +24,17 @@ export function SidebarProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [isOpen, setIsOpen] =
-    useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const openSidebar = () =>
-    setIsOpen(true);
+  const pathname = usePathname(); // 👈 get current route
 
-  const closeSidebar = () =>
+  // 🔥 THIS IS THE FIX
+  useEffect(() => {
     setIsOpen(false);
+  }, [pathname]);
 
+  const openSidebar = () => setIsOpen(true);
+  const closeSidebar = () => setIsOpen(false);
   const toggleSidebar = () =>
     setIsOpen((prev) => !prev);
 
@@ -51,9 +56,7 @@ export function SidebarProvider({
 }
 
 export function useSidebar() {
-  const context = useContext(
-    SidebarContext
-  );
+  const context = useContext(SidebarContext);
 
   if (!context) {
     throw new Error(

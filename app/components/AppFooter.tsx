@@ -18,7 +18,7 @@ export default function AppFooter() {
   // Home, Book, Bee, Message, Schedule :contentReference[oaicite:3]{index=3}
   const items: FooterItem[] = [
     { label: "Home", route: "/(app)/home", icon: "home" },
-    { label: "Book", route: "/(app)/book", icon: "shopping-bag" },
+    { label: "Book", route: "/(app)/book", icon: "book-open" },
     { label: "Bee", route: "/(app)/assistant", icon: "robot" },
     { label: "Message", route: "/(app)/messages", icon: "comments" },
     { label: "Schedule", route: "/(app)/schedule", icon: "calendar-alt" },

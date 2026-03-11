@@ -31,9 +31,7 @@ export type AppTheme = {
 
     greetingTitle: string;
     greetingName: string;
-    
-    textSecondary: "#888888",
-      
+
   };
 
   greetingImage: any;
@@ -66,8 +64,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       greetingTitle: "#FFFFFF",
       greetingName: "#FFFFFF",
       
-      textSecondary: "#888888",
-      
     },
 
     greetingImage: require("@/app/assets/images/bee.jpg"),
@@ -98,8 +94,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
 
       greetingTitle: "#FFFFFF",
       greetingName: "#F4B400",
-      
-      textSecondary: "#888888",
       
     },
 
@@ -132,8 +126,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       greetingTitle: "#FFFFFF",
       greetingName: "#FFFFFF",
 
-      textSecondary: "#888888",
-      
     },
 
     greetingImage: require("@/app/assets/images/flowersbloom.jpg"),
@@ -165,8 +157,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       greetingTitle: "#FFFFFF",
       greetingName: "#FFFFFF",
 
-      textSecondary: "#888888",
-      
     },
 
     greetingImage: require("@/app/assets/images/bluesparkle.jpg"),
@@ -197,8 +187,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
 
       greetingTitle: "#FFFFFF",
       greetingName: "#FFFFFF",
-      
-      textSecondary: "#888888",
 
     },
 
@@ -231,8 +219,6 @@ export const THEMES: Record<ThemeType, AppTheme> = {
       greetingTitle: "#FFFFFF",
       greetingName: "#FFFFFF",
       
-      textSecondary: "#888888",
-
     },
 
     greetingImage: require("@/app/assets/images/bricks.jpg"),
