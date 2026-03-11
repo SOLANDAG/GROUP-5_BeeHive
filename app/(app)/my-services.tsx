@@ -1,22 +1,27 @@
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { useTheme } from "@/lib/theme/ThemeProvider";
-import { useRole } from "@/lib/auth/useRole";
-import { useEffect, useState } from "react";
-import { router } from "expo-router";
-
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function MyServicesScreen() {
   const { theme } = useTheme();
-  const { roles } = useRole();
 
   const [serviceName, setServiceName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+
   const createService = async () => {
-  const user = auth.currentUser;
+    const user = auth.currentUser;
 
     if (!user) {
       Alert.alert("You must be logged in.");
@@ -53,90 +58,102 @@ export default function MyServicesScreen() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (!roles.provider) {
-      router.replace("/(app)/home");
-    }
-  }, [roles]);
-
-  if (!roles.provider) return null;
-
   return (
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: theme.colors.bg,
-      padding: 24,
-    }}
-  >
-    <Text
+    <ScrollView
       style={{
-        fontSize: 24,
-        fontWeight: "900",
-        color: theme.colors.text,
-        marginBottom: 20,
+        flex: 1,
+        backgroundColor: theme.colors.bg,
+        padding: 24,
       }}
     >
-      My Services
+      <Text
+        style={{
+          fontFamily: "Kyiv_700",
+          fontSize: 24,
+          marginBottom: 20,
+          color: theme.colors.text,
+        }}
+      >
+        Create Service
       </Text>
 
-      <Text style={{ color: theme.colors.placeholder }}>Service Name</Text>
+      <Text style={{ fontFamily: "Kyiv_600", color: theme.colors.placeholder }}>
+        Service Name
+      </Text>
+
       <TextInput
         value={serviceName}
         onChangeText={setServiceName}
-        placeholder="Enter service name"
+        placeholder="Ex: Home Cleaning"
+        placeholderTextColor={theme.colors.placeholder}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
-          borderRadius: 12,
-          marginBottom: 12,
+          borderRadius: 16,
+          marginBottom: 16,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
-      <Text style={{ color: theme.colors.placeholder }}>Price</Text>
+      <Text style={{ fontFamily: "Kyiv_600", color: theme.colors.placeholder }}>
+        Price
+      </Text>
+
       <TextInput
         value={price}
         onChangeText={setPrice}
-        placeholder="Enter price"
+        placeholder="Ex: 500"
         keyboardType="numeric"
+        placeholderTextColor={theme.colors.placeholder}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
-          borderRadius: 12,
-          marginBottom: 12,
+          borderRadius: 16,
+          marginBottom: 16,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
-      <Text style={{ color: theme.colors.placeholder }}>Description</Text>
+      <Text style={{ fontFamily: "Kyiv_600", color: theme.colors.placeholder }}>
+        Description
+      </Text>
+
       <TextInput
         value={description}
         onChangeText={setDescription}
-        placeholder="Describe your service"
+        placeholder="Describe your service..."
         multiline
+        placeholderTextColor={theme.colors.placeholder}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
-          borderRadius: 12,
-          marginBottom: 20,
+          borderRadius: 16,
+          marginBottom: 24,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
       <Pressable
         onPress={createService}
+        disabled={loading}
         style={{
-          backgroundColor: theme.colors.primary,
+          backgroundColor: loading ? "#BDBDBD" : theme.colors.primary,
           padding: 16,
-          borderRadius: 12,
+          borderRadius: 16,
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "#fff", fontWeight: "600" }}>
-          {loading ? "Creating..." : "Create Service"}
-        </Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+            Create Service
+          </Text>
+        )}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }

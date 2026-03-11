@@ -203,6 +203,20 @@ export default function Sidebar() {
                   "/(app)/payment",
                   "credit-card"
                 )}
+
+                <View
+                  style={[
+                    styles.divider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+
+                {renderItem("Provider Applications", "/(app)/admin/applications", "clipboard-list")}
+                {renderItem(
+                  "Become a Provider",
+                  "/(app)/apply-provider",
+                  "briefcase"
+                )}
               </>
             )}
 

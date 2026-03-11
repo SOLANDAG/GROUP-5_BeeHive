@@ -82,6 +82,7 @@ export default function ApplyProviderScreen() {
           borderRadius: 16,
           marginBottom: 12,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
@@ -96,6 +97,7 @@ export default function ApplyProviderScreen() {
           borderRadius: 16,
           marginBottom: 12,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
@@ -112,6 +114,7 @@ export default function ApplyProviderScreen() {
           marginBottom: 12,
           color: theme.colors.text,
           minHeight: 100,
+          fontFamily: "Kyiv_400",
         }}
       />
 
@@ -126,6 +129,7 @@ export default function ApplyProviderScreen() {
           borderRadius: 16,
           marginBottom: 20,
           color: theme.colors.text,
+          fontFamily: "Kyiv_400",
         }}
       />
 
