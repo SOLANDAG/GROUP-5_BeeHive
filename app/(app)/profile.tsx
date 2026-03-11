@@ -7,18 +7,33 @@ import {
   ScrollView,
   Alert,
   Image,
-  Platform,
+  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { updateProfile, updatePassword, updateEmail } from "firebase/auth";
+import {
+  updateProfile,
+  updatePassword,
+  updateEmail,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  sendPasswordResetEmail } from "firebase/auth";
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
-  const user = auth.currentUser;
+  const [user, setUser] = useState(auth.currentUser);
+
+    useEffect(() => {
+      const unsubscribe = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+      });
+
+      return unsubscribe;
+    }, []);
 
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -27,9 +42,12 @@ export default function ProfileScreen() {
 
   const [birthdate, setBirthdate] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [tempBirthdate, setTempBirthdate] = useState<Date | null>(null);
 
   const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [pickedImageUri, setPickedImageUri] = useState<string | null>(null);
 
+  const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -39,64 +57,93 @@ export default function ProfileScreen() {
     const fetchUser = async () => {
       if (!user) return;
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        setFirstName(data.firstName || "");
-        setMiddleName(data.middleName || "");
-        setLastName(data.lastName || "");
-        if (data.birthdate) setBirthdate(new Date(data.birthdate));
-      } else {
-        // fallback from auth if no doc yet
-        setFirstName(user.displayName || "");
-      }
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
 
-      setPhotoURL(user.photoURL);
-      setEmail(user.email || "");
+        if (snap.exists()) {
+          const data = snap.data();
+
+          setFirstName(data.firstName || "");
+          setMiddleName(data.middleName || "");
+          setLastName(data.lastName || "");
+
+          if (data.birthdate) {
+            setBirthdate(new Date(data.birthdate));
+          }
+
+          setPhotoURL(data.photoURL || user.photoURL || null);
+        } else {
+          setFirstName(user.displayName || "");
+          setPhotoURL(user.photoURL || null);
+        }
+
+        setEmail(user.email || "");
+      } catch (error) {
+        console.log("Fetch profile error:", error);
+      }
     };
 
     fetchUser();
-  }, []);
+  }, [user]);
 
   const calculateAge = (date: Date) => {
     const today = new Date();
     let age = today.getFullYear() - date.getFullYear();
-    const m = today.getMonth() - date.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < date.getDate())) age--;
+    const monthDifference = today.getMonth() - date.getMonth();
+
+    if (
+      monthDifference < 0 ||
+      (monthDifference === 0 && today.getDate() < date.getDate())
+    ) {
+      age--;
+    }
+
     return age;
   };
 
   const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Please allow gallery access first.");
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
 
     if (!result.canceled) {
-      setPhotoURL(result.assets[0].uri);
+      const localUri = result.assets[0].uri;
+      setPickedImageUri(localUri);
+      setPhotoURL(localUri);
     }
   };
 
   const prettyAuthError = (code?: string) => {
     switch (code) {
       case "auth/requires-recent-login":
-        return "For security, please log in again to change email/password.";
+        return "For security, please log in again to change email or password.";
       case "auth/invalid-email":
         return "That email address is not valid.";
       case "auth/email-already-in-use":
         return "That email is already registered.";
       case "auth/weak-password":
-        return "Password is too weak. Use at least 6 characters (better if longer).";
+        return "Password is too weak. Use at least 6 characters.";
       default:
         return code ? `Update failed (${code}).` : "Update failed.";
     }
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      Alert.alert("No user found.");
+      return;
+    }
 
-    // basic validations
     if (!firstName.trim() || !lastName.trim()) {
       Alert.alert("First and Last name are required.");
       return;
@@ -112,6 +159,7 @@ export default function ProfileScreen() {
         Alert.alert("Password must be at least 6 characters.");
         return;
       }
+
       if (newPassword !== confirmPassword) {
         Alert.alert("Passwords do not match.");
         return;
@@ -121,50 +169,75 @@ export default function ProfileScreen() {
     setLoading(true);
 
     try {
-      // 1) Save to Firestore safely (works even if doc doesn't exist yet)
+      let finalPhotoURL = photoURL || user.photoURL || null;
+
+      if (pickedImageUri) {
+        finalPhotoURL = pickedImageUri;
+      }
+
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
       await setDoc(
         doc(db, "users", user.uid),
         {
           firstName: firstName.trim(),
           middleName: middleName.trim(),
           lastName: lastName.trim(),
+          fullName,
+          email: email.trim(),
           birthdate: birthdate ? birthdate.toISOString() : null,
+          photoURL: finalPhotoURL,
+          updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
 
-      // 2) Update auth profile (sidebar reads from here)
       await updateProfile(user, {
-        displayName: firstName.trim(), // formal first name
-        photoURL: photoURL || undefined,
+        displayName: fullName,
+        photoURL: finalPhotoURL || undefined,
       });
 
-      // 3) Update email only if changed
       if (email.trim() && email.trim() !== (user.email || "")) {
         try {
           await updateEmail(user, email.trim());
-        } catch (e: any) {
-          Alert.alert(prettyAuthError(e?.code));
-          // Don't return; let other saves stand
+        } catch (error: any) {
+          Alert.alert(prettyAuthError(error?.code));
         }
       }
 
-      // 4) Update password only if provided
       if (newPassword) {
-        try {
-          await updatePassword(user, newPassword);
-        } catch (e: any) {
-          Alert.alert(prettyAuthError(e?.code));
-          // Don't return; let other saves stand
-        }
+
+      if (!oldPassword) {
+        Alert.alert("Please enter your current password.");
+        return;
       }
 
-      Alert.alert("Profile updated successfully.");
+      try {
+
+        const credential = EmailAuthProvider.credential(
+          user.email || "",
+          oldPassword
+        );
+
+        await reauthenticateWithCredential(user, credential);
+
+        await updatePassword(user, newPassword);
+
+      } catch (error: any) {
+        Alert.alert(prettyAuthError(error?.code));
+      }
+
+    }
+
+      setPickedImageUri(null);
+      setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (e: any) {
-      console.log("Profile update error:", e);
-      Alert.alert(prettyAuthError(e?.code));
+
+      Alert.alert("Success", "Profile updated successfully.");
+    } catch (error: any) {
+      console.log("Profile update error:", error);
+      Alert.alert("Error", prettyAuthError(error?.code));
     } finally {
       setLoading(false);
     }
@@ -178,8 +251,8 @@ export default function ProfileScreen() {
         padding: 24,
       }}
       keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* PROFILE IMAGE */}
       <View style={{ alignItems: "center", marginBottom: 20 }}>
         <Image
           source={
@@ -207,7 +280,6 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      {/* First Name */}
       <Text style={labelStyle(theme)}>First Name</Text>
       <TextInput
         value={firstName}
@@ -218,7 +290,6 @@ export default function ProfileScreen() {
         style={inputStyle(theme)}
       />
 
-      {/* Middle Name */}
       <Text style={labelStyle(theme)}>Middle Name (Optional)</Text>
       <TextInput
         value={middleName}
@@ -229,7 +300,6 @@ export default function ProfileScreen() {
         style={inputStyle(theme)}
       />
 
-      {/* Last Name */}
       <Text style={labelStyle(theme)}>Last Name</Text>
       <TextInput
         value={lastName}
@@ -240,7 +310,6 @@ export default function ProfileScreen() {
         style={inputStyle(theme)}
       />
 
-      {/* Email */}
       <Text style={labelStyle(theme)}>Email Address</Text>
       <TextInput
         value={email}
@@ -253,46 +322,102 @@ export default function ProfileScreen() {
         style={inputStyle(theme)}
       />
 
-      {/* Birthdate */}
       <Text style={labelStyle(theme)}>Birthdate</Text>
       <Pressable
-        onPress={() => setShowPicker(true)}
-        style={[
-          inputStyle(theme),
-          { justifyContent: "center" },
-        ]}
+        onPress={() => {
+          setTempBirthdate(birthdate || new Date(2000, 0, 1));
+          setShowPicker(true);
+        }}
+        style={[inputStyle(theme), { justifyContent: "center" }]}
       >
         <Text style={{ fontFamily: "Kyiv_400", color: theme.colors.text }}>
           {birthdate ? birthdate.toDateString() : "Select birthdate"}
         </Text>
       </Pressable>
 
+      {/* DO NOT CHANGE, IT'S ALREADY WORKING PROPERLY*/}
       {showPicker && (
-        <View
+      <View
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 16,
+          borderRadius: 16,
+          marginBottom: 12,
+        }}
+      >
+        <DateTimePicker
+          value={tempBirthdate || new Date(2000, 0, 1)}
+          mode="date"
+          display="spinner"
+          themeVariant={theme.colors.bg === "#000" ? "dark" : "light"}
+          textColor={theme.colors.text}
+          onChange={(event, selectedDate) => {
+            if (selectedDate) {
+              setTempBirthdate(selectedDate);
+            }
+          }}
+        />
+
+        <Pressable
+          onPress={() => {
+            if (tempBirthdate) {
+              setBirthdate(tempBirthdate);
+            }
+            setShowPicker(false);
+          }}
           style={{
-            backgroundColor: "#fff",
-            borderRadius: 16,
-            padding: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
+            marginTop: 10,
+            backgroundColor: theme.colors.primary,
+            padding: 12,
+            borderRadius: 12,
+            alignItems: "center",
           }}
         >
-          <DateTimePicker
-            value={birthdate || new Date(2000, 0, 1)}
-            mode="date"
-            display="spinner"
-            themeVariant="light"
-            onChange={(event, selectedDate) => {
-              if (selectedDate) setBirthdate(selectedDate);
-            }}
-          />
-        </View>
-      )}
+          <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+            Set Birthdate
+          </Text>
+        </Pressable>
+      </View>
+    )}
 
       <View style={dividerStyle(theme)} />
 
-      {/* Password */}
-      <Text style={labelStyle(theme)}>Change Password</Text>
+      <Text style={labelStyle(theme)}>Current Password</Text>
+
+<TextInput
+  value={oldPassword}
+  onChangeText={setOldPassword}
+  placeholder="Enter current password"
+  placeholderTextColor={theme.colors.placeholder}
+  selectionColor={theme.colors.primary}
+  secureTextEntry
+  style={inputStyle(theme)}
+/>
+
+<Pressable
+  onPress={async () => {
+    if (!user?.email) return;
+
+    await sendPasswordResetEmail(auth, user.email);
+
+    Alert.alert(
+      "Password Reset",
+      "A password reset link has been sent to your email."
+    );
+  }}
+>
+  <Text
+    style={{
+      color: theme.colors.primary,
+      fontFamily: "Kyiv_500",
+      marginBottom: 12,
+    }}
+  >
+    Forgot password?
+  </Text>
+      </Pressable>
+
+      <Text style={labelStyle(theme)}>New Password</Text>
 
       <TextInput
         value={newPassword}
@@ -316,19 +441,23 @@ export default function ProfileScreen() {
 
       <View style={dividerStyle(theme)} />
 
-      {/* Save */}
       <Pressable
         onPress={handleSave}
+        disabled={loading}
         style={{
-          backgroundColor: theme.colors.primary,
+          backgroundColor: loading ? "#BDBDBD" : theme.colors.primary,
           padding: 16,
           borderRadius: 16,
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
-          {loading ? "Saving..." : "Save Changes"}
-        </Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+            Save Changes
+          </Text>
+        )}
       </Pressable>
     </ScrollView>
   );
