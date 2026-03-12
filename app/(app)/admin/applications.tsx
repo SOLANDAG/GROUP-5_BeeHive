@@ -16,6 +16,7 @@ import {
   getDoc,
   query,
   where,
+  addDoc
 } from "firebase/firestore";
 
 import { db, auth } from "@/lib/firebase";
@@ -30,6 +31,10 @@ type Application = {
   description: string;
   location?: string;
   status: string;
+
+  availableDays?: string[];
+  startTime?: string;
+  endTime?: string;
 
   fullName?: string;
   photoURL?: string;
@@ -103,7 +108,7 @@ export default function AdminApplications() {
         let profile: any = {};
 
         try {
-          const userSnap = await getDoc(doc(db, "users", data.userId));
+          const userSnap = await getDoc(doc(db, "users", docSnap.id));
 
           if (userSnap.exists()) {
             profile = userSnap.data();
@@ -114,7 +119,7 @@ export default function AdminApplications() {
 
         list.push({
           id: docSnap.id,
-          userId: data.userId,
+          userId: docSnap.id,
           businessName: data.businessName,
           category: data.category,
           description: data.description,
@@ -124,6 +129,9 @@ export default function AdminApplications() {
           fullName: profile.fullName,
           photoURL: profile.photoURL,
           bio: profile.bio,
+          availableDays: data.availableDays || [],
+          startTime: data.startTime,
+          endTime: data.endTime,
         });
       }
 
@@ -146,16 +154,46 @@ export default function AdminApplications() {
   // ================================
   const approveApplication = async (app: Application) => {
     try {
+
+      // Make user a provider
       await updateDoc(doc(db, "users", app.userId), {
-        "roles.provider": true,
+        roles: { provider: true },
         providerStatus: "approved",
       });
 
+      // Update application status
       await updateDoc(doc(db, "providerApplications", app.id), {
         status: "approved",
       });
 
+      // Create service entry
+      // Create service entry
+          await addDoc(collection(db, "services"), {
+            providerId: app.userId,
+            serviceName: app.businessName,
+            businessName: app.businessName,
+            category: app.category,
+            description: app.description,
+            location: app.location || "",
+            availableDays: app.availableDays || [],
+            startTime: app.startTime || "",
+            endTime: app.endTime || "",
+            isActive: true,
+            createdAt: new Date(),
+          });
+
+          // Notify provider that application got approved
+          await addDoc(collection(db, "notifications"), {
+            userId: app.userId,
+            title: "Application Approved",
+            body: "Your service provider application has been approved.",
+            type: "provider_approved",
+            isRead: false,
+            createdAt: new Date(),
+          });
+
       fetchApplications();
+
     } catch (error) {
       console.log("Approve error:", error);
     }
@@ -246,7 +284,11 @@ export default function AdminApplications() {
               <View style={{ flexDirection: "row", marginBottom: 10 }}>
                 {item.photoURL && (
                   <Image
-                    source={{ uri: item.photoURL }}
+                    source={
+                      item.photoURL
+                        ? { uri: item.photoURL }
+                        : require("@/app/assets/images/profile.jpg")
+                    }
                     style={{
                       width: 60,
                       height: 60,
@@ -313,6 +355,30 @@ export default function AdminApplications() {
               >
                 {item.description}
               </Text>
+
+              {item.availableDays && item.availableDays.length > 0 && (
+                <Text
+                  style={{
+                    fontFamily: "Kyiv_400",
+                    color: theme.colors.text,
+                    marginTop: 6,
+                  }}
+                >
+                  Days: {item.availableDays.join(", ")}
+                </Text>
+              )}
+
+              {item.startTime && item.endTime && (
+                <Text
+                  style={{
+                    fontFamily: "Kyiv_400",
+                    color: theme.colors.text,
+                    marginTop: 4,
+                  }}
+                >
+                  Time: {item.startTime} - {item.endTime}
+                </Text>
+              )}
 
               {/* ACTIONS */}
               <View

@@ -18,8 +18,12 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 
+import DateTimePicker from "@react-native-community/datetimepicker";
+
 export default function ApplyProviderScreen() {
   const { theme } = useTheme();
+
+  const user = auth.currentUser;
 
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState("");
@@ -28,11 +32,48 @@ export default function ApplyProviderScreen() {
 
   const [status, setStatus] = useState<string | null>(null);
 
-  const user = auth.currentUser;
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
+
+  const [startTimeDate, setStartTimeDate] = useState<Date>(new Date());
+  const [endTimeDate, setEndTimeDate] = useState<Date>(new Date());
+
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+
+  const formatTime = (date: Date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+
+    const ampm = hours >= 12 ? "PM" : "AM";
+
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const DAYS = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  const toggleDay = (day: string) => {
+    if (availableDays.includes(day)) {
+      setAvailableDays(availableDays.filter((d) => d !== day));
+    } else {
+      setAvailableDays([...availableDays, day]);
+    }
+  };
 
   // =========================
-  // CHECK EXISTING APPLICATION
+  // LOAD EXISTING APPLICATION
   // =========================
+
   useEffect(() => {
     const checkApplication = async () => {
       if (!user) return;
@@ -43,7 +84,16 @@ export default function ApplyProviderScreen() {
         );
 
         if (snap.exists()) {
-          setStatus(snap.data().status);
+          const data = snap.data();
+
+          setStatus(data.status);
+
+          setBusinessName(data.businessName || "");
+          setCategory(data.category || "");
+          setDescription(data.description || "");
+          setLocation(data.location || "");
+
+          if (data.availableDays) setAvailableDays(data.availableDays);
         }
       } catch (error) {
         console.log("Application check error:", error);
@@ -54,8 +104,9 @@ export default function ApplyProviderScreen() {
   }, []);
 
   // =========================
-  // SUBMIT APPLICATION
+  // SUBMIT / UPDATE
   // =========================
+
   const handleApply = async () => {
     if (!user) {
       Alert.alert("You must be logged in.");
@@ -75,11 +126,6 @@ export default function ApplyProviderScreen() {
       if (existing.exists()) {
         const data = existing.data();
 
-        if (data.status === "pending") {
-          Alert.alert("Your application is still pending.");
-          return;
-        }
-
         if (data.status === "approved") {
           Alert.alert("You are already a provider.");
           return;
@@ -94,6 +140,9 @@ export default function ApplyProviderScreen() {
           category,
           description,
           location,
+          availableDays,
+          startTime: formatTime(startTimeDate),
+          endTime: formatTime(endTimeDate),
           status: "pending",
           createdAt: new Date(),
         },
@@ -110,7 +159,7 @@ export default function ApplyProviderScreen() {
 
       setStatus("pending");
 
-      Alert.alert("Application submitted for review.");
+      Alert.alert("Application submitted.");
     } catch (error) {
       console.log("Application error:", error);
       Alert.alert("Failed to submit application.");
@@ -120,6 +169,7 @@ export default function ApplyProviderScreen() {
   // =========================
   // CANCEL APPLICATION
   // =========================
+
   const cancelApplication = async () => {
     if (!user) return;
 
@@ -143,6 +193,7 @@ export default function ApplyProviderScreen() {
         padding: 24,
       }}
     >
+
       <Text
         style={{
           fontFamily: "Kyiv_700",
@@ -162,7 +213,7 @@ export default function ApplyProviderScreen() {
             fontFamily: "Kyiv_600",
           }}
         >
-          Your provider application is pending approval.
+          You can still edit your application while it is pending review.
         </Text>
       )}
 
@@ -207,14 +258,14 @@ export default function ApplyProviderScreen() {
           padding: 14,
           borderRadius: 16,
           marginBottom: 12,
-          color: theme.colors.text,
           minHeight: 100,
+          color: theme.colors.text,
           fontFamily: "Kyiv_400",
         }}
       />
 
       <TextInput
-        placeholder="Business Location (optional)"
+        placeholder="Business Location"
         value={location}
         onChangeText={setLocation}
         placeholderTextColor={theme.colors.placeholder}
@@ -228,21 +279,177 @@ export default function ApplyProviderScreen() {
         }}
       />
 
+      {/* AVAILABLE DAYS */}
+
+      <Text
+        style={{
+          fontFamily: "Kyiv_600",
+          color: theme.colors.text,
+          marginBottom: 8,
+        }}
+      >
+        Available Days
+      </Text>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 20 }}>
+        {DAYS.map((day) => {
+          const selected = availableDays.includes(day);
+
+          return (
+            <Pressable
+              key={day}
+              onPress={() => toggleDay(day)}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 20,
+                marginRight: 8,
+                marginBottom: 8,
+                backgroundColor: selected
+                  ? theme.colors.primary
+                  : theme.colors.card,
+              }}
+            >
+              <Text
+                style={{
+                  color: selected ? "#fff" : theme.colors.text,
+                  fontFamily: "Kyiv_400",
+                }}
+              >
+                {day}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* AVAILABLE TIME */}
+
+      <Text
+        style={{
+          fontFamily: "Kyiv_600",
+          color: theme.colors.text,
+          marginBottom: 8,
+        }}
+      >
+        Available Time
+      </Text>
+
       <Pressable
-        disabled={status === "pending"}
+        onPress={() => setShowStartPicker(true)}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+        }}
+      >
+        <Text style={{ color: theme.colors.text }}>
+          Start Time: {formatTime(startTimeDate)}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => setShowEndPicker(true)}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 20,
+        }}
+      >
+        <Text style={{ color: theme.colors.text }}>
+          End Time: {formatTime(endTimeDate)}
+        </Text>
+      </Pressable>
+
+      {showStartPicker && (
+        <View
+          style={{
+            backgroundColor: theme.colors.card,
+            padding: 20,
+            borderRadius: 20,
+            marginBottom: 20,
+          }}
+        >
+          <DateTimePicker
+            value={startTimeDate}
+            mode="time"
+            display="spinner"
+            onChange={(event, selectedDate) => {
+              if (selectedDate) {
+                setStartTimeDate(selectedDate);
+              }
+            }}
+          />
+
+          <Pressable
+            onPress={() => setShowStartPicker(false)}
+            style={{
+              marginTop: 10,
+              backgroundColor: theme.colors.primary,
+              padding: 14,
+              borderRadius: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+              Done
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {showEndPicker && (
+        <View
+          style={{
+            backgroundColor: theme.colors.card,
+            padding: 20,
+            borderRadius: 20,
+            marginBottom: 20,
+          }}
+        >
+          <DateTimePicker
+            value={endTimeDate}
+            mode="time"
+            display="spinner"
+            onChange={(event, selectedDate) => {
+              if (selectedDate) {
+                setEndTimeDate(selectedDate);
+              }
+            }}
+          />
+
+          <Pressable
+            onPress={() => setShowEndPicker(false)}
+            style={{
+              marginTop: 10,
+              backgroundColor: theme.colors.primary,
+              padding: 14,
+              borderRadius: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+              Done
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* SUBMIT BUTTON */}
+
+      <Pressable
         onPress={handleApply}
         style={{
-          backgroundColor:
-            status === "pending"
-              ? "#BDBDBD"
-              : theme.colors.primary,
+          backgroundColor: theme.colors.primary,
           padding: 16,
           borderRadius: 16,
           alignItems: "center",
         }}
       >
         <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
-          Submit Application
+          {status === "pending" ? "Update Application" : "Submit Application"}
         </Text>
       </Pressable>
 
@@ -262,6 +469,7 @@ export default function ApplyProviderScreen() {
           </Text>
         </Pressable>
       )}
+
     </ScrollView>
   );
 }

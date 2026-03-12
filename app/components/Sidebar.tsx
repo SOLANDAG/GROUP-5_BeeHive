@@ -8,21 +8,24 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { useRouter, usePathname } from "expo-router";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { useSidebar } from "@/lib/ui/SidebarContext";
 import { useRoleContext } from "@/lib/auth/RoleProvider";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 
 import { PanGestureHandler } from "react-native-gesture-handler";
+
+import { doc, getDoc } from "firebase/firestore";
 
 const { width } = Dimensions.get("window");
 const SIDEBAR_WIDTH = width * 0.8;
 
 export default function Sidebar() {
+  const [isAdmin, setIsAdmin] = useState(false);
   const { theme } = useTheme();
   const { isOpen, closeSidebar, openSidebar } = useSidebar();
   const { currentMode } = useRoleContext();
@@ -30,6 +33,31 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const user = auth.currentUser;
+
+      if (!user) return;
+
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+
+        if (!snap.exists()) return;
+
+        const data = snap.data();
+
+        if (data.admin === true) {
+          setIsAdmin(true);
+        }
+
+      } catch (error) {
+        console.log("Sidebar admin check error:", error);
+      }
+    };
+
+    checkAdmin();
+  }, []);
 
   useEffect(() => {
     Animated.timing(translateX, {
@@ -211,7 +239,8 @@ export default function Sidebar() {
                   ]}
                 />
 
-                {renderItem("Provider Applications", "/(app)/admin/applications", "clipboard-list")}
+                {isAdmin && renderItem("Provider Applications", "/(app)/admin/applications", "clipboard-list")}
+
                 {renderItem(
                   "Become a Provider",
                   "/(app)/apply-provider",
