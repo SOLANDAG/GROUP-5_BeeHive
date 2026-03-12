@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +37,32 @@ export default function Home() {
   const fullText = "How can BeeHive assist you today?";
   const username = auth.currentUser?.displayName || "Guest";
 
+  const [services, setServices] = useState<any[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+
+  const fetchServices = async () => {
+    try {
+      const q = query(collection(db, "services"));
+
+      const snap = await getDocs(q);
+
+      const list = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setServices(list);
+    } catch (e) {
+      console.log(e);
+    }
+
+    setLoadingServices(false);
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
@@ -48,38 +75,38 @@ export default function Home() {
     extrapolate: "clamp",
   });
 
-    useEffect(() => {
-      let timeout: any;
-      let hasTyped = false;
+  useEffect(() => {
+    let timeout: any;
+    let hasTyped = false;
 
-      const listener = scrollY.addListener(({ value }) => {
-        if (value > 60 && !hasTyped) {
-          hasTyped = true;
+    const listener = scrollY.addListener(({ value }) => {
+      if (value > 60 && !hasTyped) {
+        hasTyped = true;
 
-          let i = 0;
+        let i = 0;
 
-          const typeNext = () => {
-            if (i <= fullText.length) {
-              setTypedText(fullText.slice(0, i));
-              i++;
-              timeout = setTimeout(typeNext, 40);
-            }
-          };
+        const typeNext = () => {
+          if (i <= fullText.length) {
+            setTypedText(fullText.slice(0, i));
+            i++;
+            timeout = setTimeout(typeNext, 40);
+          }
+        };
 
-          typeNext();
-        }
+        typeNext();
+      }
 
-        if (value <= 60) {
-          hasTyped = false;
-          setTypedText("");
-        }
-      });
+      if (value <= 60) {
+        hasTyped = false;
+        setTypedText("");
+      }
+    });
 
-      return () => {
-        scrollY.removeListener(listener);
-        if (timeout) clearTimeout(timeout);
-      };
-    }, [scrollY]);
+    return () => {
+      scrollY.removeListener(listener);
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [scrollY]);
 
   const renderTypedText = () => {
     const beeIndex = typedText.indexOf("BeeHive");
@@ -158,7 +185,7 @@ export default function Home() {
             </Text>
           </Animated.View>
 
-          {/* TYPED QUESTION (HANDYCART EXACT LOGIC) */}
+          {/* TYPED QUESTION */}
           {typedText.length > 0 && (
             <Text style={styles.typedText}>
               {renderTypedText()}
@@ -209,18 +236,108 @@ export default function Home() {
         )}
         scrollEventThrottle={16}
       >
-        {Array.from({ length: 12 }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          />
-        ))}
+
+        <Text
+          style={{
+            fontFamily: "Kyiv_700",
+            fontSize: 22,
+            color: theme.colors.text,
+            marginBottom: 15,
+          }}
+        >
+          Available Services
+        </Text>
+
+        {loadingServices ? (
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        ) : services.length === 0 ? (
+          <Text
+            style={{
+              fontFamily: "Kyiv_400",
+              color: theme.colors.text,
+              opacity: 0.7,
+            }}
+          >
+            No approved services yet.
+          </Text>
+        ) : (
+          services.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  padding: 18,
+                  height: "auto",
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  fontFamily: "Kyiv_700",
+                  fontSize: 22,
+                  color: theme.colors.primary,
+                }}
+              >
+                {item.businessName}
+              </Text>
+
+              <Text
+                style={{
+                  fontFamily: "Kyiv_500",
+                  fontSize: 13,
+                  marginBottom: 8,
+                  opacity: 0.8,
+                  color: theme.colors.text,
+                }}
+              >
+                {item.category}
+              </Text>
+
+              <Text
+                style={{
+                  fontFamily: "Kyiv_400",
+                  color: theme.colors.text,
+                  marginBottom: 10,
+                }}
+              >
+                {item.description}
+              </Text>
+
+              <View
+                style={{
+                  height: 2,
+                  backgroundColor: theme.colors.border,
+                  marginVertical: 10,
+                }}
+              />
+
+              <Text
+                style={{
+                  fontFamily: "Kyiv_700",
+                  fontSize: 15,
+                  color: theme.colors.primary,
+                  marginBottom: 4,
+                }}
+              >
+                SCHEDULE
+              </Text>
+
+              <Text style={{ color: theme.colors.text }}>
+                {Array.isArray(item.availableDays)
+                  ? item.availableDays.join(" | ")
+                  : "Schedule not set"}
+              </Text>
+
+              <Text style={{ color: theme.colors.text }}>
+                {item.startTime} - {item.endTime}
+              </Text>
+            </View>
+          ))
+        )}
+
       </Animated.ScrollView>
     </View>
   );

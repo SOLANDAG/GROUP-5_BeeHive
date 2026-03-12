@@ -157,7 +157,7 @@ export default function AdminApplications() {
 
       // Make user a provider
       await updateDoc(doc(db, "users", app.userId), {
-        roles: { provider: true },
+        "roles.provider": true,
         providerStatus: "approved",
       });
 

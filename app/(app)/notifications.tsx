@@ -1,87 +1,167 @@
-import { View, Text, FlatList, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { useTheme } from "@/lib/theme/ThemeProvider";
-import { useRouter } from "expo-router";
-import { FontAwesome5 } from "@expo/vector-icons";
+import { auth, db } from "@/lib/firebase";
+import { router } from "expo-router";
+import {
+  collection,
+  getDocs,
+  orderBy,
+  query,
+  updateDoc,
+  doc,
+  where,
+} from "firebase/firestore";
 
-const mockNotifications = [
-  {
-    id: "1",
-    title: "Booking Confirmed",
-    description: "Your cleaning service is confirmed.",
-  },
-  {
-    id: "2",
-    title: "New Message",
-    description: "You received a message from a provider.",
-  },
-  {
-    id: "3",
-    title: "Payment Successful",
-    description: "Your payment has been processed.",
-  },
-];
+type AppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  isRead: boolean;
+  bookingId?: string;
+  conversationId?: string;
+};
 
 export default function NotificationsScreen() {
   const { theme } = useTheme();
-  const router = useRouter();
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchNotifications = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      const q = query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        orderBy("createdAt", "desc")
+      );
+
+      const snap = await getDocs(q);
+
+      const list: AppNotification[] = snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          title: data.title || "Notification",
+          body: data.body || "",
+          type: data.type || "",
+          isRead: !!data.isRead,
+          bookingId: data.bookingId || "",
+          conversationId: data.conversationId || "",
+        };
+      });
+
+      setItems(list);
+    } catch (error) {
+      console.log("Fetch notifications error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const openNotification = async (item: AppNotification) => {
+    try {
+      await updateDoc(doc(db, "notifications", item.id), {
+        isRead: true,
+      });
+
+      if (item.conversationId) {
+        router.push({
+          pathname: "/(app)/messages",
+          params: {
+            conversationId: item.conversationId,
+            bookingId: item.bookingId || "",
+          },
+        });
+        return;
+      }
+
+      if (item.bookingId) {
+        router.push("/(app)/book");
+        return;
+      }
+    } catch (error) {
+      console.log("Open notification error:", error);
+    }
+  };
 
   return (
-    <View
+    <ScrollView
       style={{
         flex: 1,
         backgroundColor: theme.colors.bg,
+        padding: 20,
       }}
+      contentContainerStyle={{ paddingBottom: 120 }}
     >
-      {/* Page Header */}
-      <View
+      <Text
         style={{
-          height: 90,
-          paddingTop: 40,
-          paddingHorizontal: 24,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
+          fontFamily: "Kyiv_700",
+          fontSize: 24,
+          color: theme.colors.text,
+          marginBottom: 16,
         }}
       >
-        <Pressable onPress={() => router.back()}>
-          <FontAwesome5
-            name="arrow-left"
-            size={18}
-            color={theme.colors.text}
-          />
-        </Pressable>
+        Notifications
+      </Text>
 
-        <Text
+      {loading ? (
+        <View style={{ paddingTop: 40, alignItems: "center" }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : items.length === 0 ? (
+        <View
           style={{
-            fontFamily: "Kyiv_600",
-            fontSize: 18,
-            color: theme.colors.text,
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
+            borderWidth: 1,
+            borderRadius: 18,
+            padding: 18,
           }}
         >
-          Notifications
-        </Text>
-
-        <View style={{ width: 18 }} />
-      </View>
-
-      {/* Notification List */}
-      <FlatList
-        data={mockNotifications}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 24 }}
-        renderItem={({ item }) => (
-          <View
+          <Text
             style={{
-              backgroundColor: theme.colors.card,
-              borderRadius: 16,
+              fontFamily: "Kyiv_600",
+              fontSize: 16,
+              color: theme.colors.text,
+            }}
+          >
+            No notifications yet
+          </Text>
+        </View>
+      ) : (
+        items.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => openNotification(item)}
+            style={{
+              backgroundColor: item.isRead ? theme.colors.card : theme.colors.primarySoft,
+              borderColor: theme.colors.border,
+              borderWidth: 1,
+              borderRadius: 18,
               padding: 16,
               marginBottom: 12,
             }}
           >
             <Text
               style={{
-                fontFamily: "Kyiv_600",
-                fontSize: 15,
+                fontFamily: "Kyiv_700",
+                fontSize: 16,
                 color: theme.colors.text,
               }}
             >
@@ -91,16 +171,29 @@ export default function NotificationsScreen() {
             <Text
               style={{
                 fontFamily: "Kyiv_400",
-                fontSize: 13,
-                marginTop: 4,
-                opacity: 0.6,
+                fontSize: 14,
+                color: theme.colors.text,
+                opacity: 0.85,
+                marginTop: 6,
+                lineHeight: 20,
               }}
             >
-              {item.description}
+              {item.body}
             </Text>
-          </View>
-        )}
-      />
-    </View>
+
+            <Text
+              style={{
+                fontFamily: "Kyiv_500",
+                fontSize: 12,
+                color: theme.colors.primary,
+                marginTop: 10,
+              }}
+            >
+              Tap to open
+            </Text>
+          </Pressable>
+        ))
+      )}
+    </ScrollView>
   );
 }
