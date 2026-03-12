@@ -22,6 +22,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
   sendPasswordResetEmail } from "firebase/auth";
+import { Keyboard, TouchableWithoutFeedback } from "react-native";
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [bio, setBio] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -66,6 +68,7 @@ export default function ProfileScreen() {
           setFirstName(data.firstName || "");
           setMiddleName(data.middleName || "");
           setLastName(data.lastName || "");
+          setBio(data.bio || "");
 
           if (data.birthdate) {
             setBirthdate(new Date(data.birthdate));
@@ -187,6 +190,7 @@ export default function ProfileScreen() {
           email: email.trim(),
           birthdate: birthdate ? birthdate.toISOString() : null,
           photoURL: finalPhotoURL,
+          bio,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -320,6 +324,19 @@ export default function ProfileScreen() {
         keyboardType="email-address"
         autoCapitalize="none"
         style={inputStyle(theme)}
+      />
+
+      <Text style={labelStyle(theme)}>About You</Text>
+
+      <TextInput
+        value={bio}
+        onChangeText={setBio}
+        placeholder="Tell people about yourself..."
+        placeholderTextColor={theme.colors.placeholder}
+        multiline
+        blurOnSubmit={true}
+        returnKeyType="done"
+        style={[inputStyle(theme), { minHeight: 80 }]}
       />
 
       <Text style={labelStyle(theme)}>Birthdate</Text>

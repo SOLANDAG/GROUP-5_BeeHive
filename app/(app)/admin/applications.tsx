@@ -5,6 +5,7 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
+  Image,
 } from "react-native";
 
 import {
@@ -29,6 +30,10 @@ type Application = {
   description: string;
   location?: string;
   status: string;
+
+  fullName?: string;
+  photoURL?: string;
+  bio?: string;
 };
 
 export default function AdminApplications() {
@@ -59,8 +64,9 @@ export default function AdminApplications() {
         }
 
         const data = snap.data();
+        console.log("Admin user data:", data);
 
-        if (!data.admin) {
+        if (data.admin !== true) {
           router.replace("/(app)/home");
           return;
         }
@@ -80,6 +86,8 @@ export default function AdminApplications() {
   // ================================
   const fetchApplications = async () => {
     try {
+      setLoading(true);
+
       const q = query(
         collection(db, "providerApplications"),
         where("status", "==", "pending")
@@ -89,8 +97,20 @@ export default function AdminApplications() {
 
       const list: Application[] = [];
 
-      snap.forEach((docSnap) => {
+      for (const docSnap of snap.docs) {
         const data = docSnap.data();
+
+        let profile: any = {};
+
+        try {
+          const userSnap = await getDoc(doc(db, "users", data.userId));
+
+          if (userSnap.exists()) {
+            profile = userSnap.data();
+          }
+        } catch (error) {
+          console.log("Profile fetch error:", error);
+        }
 
         list.push({
           id: docSnap.id,
@@ -100,15 +120,19 @@ export default function AdminApplications() {
           description: data.description,
           location: data.location,
           status: data.status,
+
+          fullName: profile.fullName,
+          photoURL: profile.photoURL,
+          bio: profile.bio,
         });
-      });
+      }
 
       setApplications(list);
     } catch (error) {
       console.log("Fetch applications error:", error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -152,9 +176,6 @@ export default function AdminApplications() {
     }
   };
 
-  // ================================
-  // NOT ADMIN
-  // ================================
   if (!isAdmin) return null;
 
   // ================================
@@ -214,11 +235,55 @@ export default function AdminApplications() {
             <View
               style={{
                 backgroundColor: theme.colors.card,
-                padding: 16,
-                borderRadius: 16,
+                borderColor: theme.colors.border,
+                borderWidth: 1,
+                borderRadius: 18,
+                padding: 18,
                 marginBottom: 16,
               }}
             >
+              {/* PROFILE */}
+              <View style={{ flexDirection: "row", marginBottom: 10 }}>
+                {item.photoURL && (
+                  <Image
+                    source={{ uri: item.photoURL }}
+                    style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 30,
+                      marginRight: 12,
+                    }}
+                  />
+                )}
+
+                <View style={{ flex: 1 }}>
+                  {item.fullName && (
+                    <Text
+                      style={{
+                        fontFamily: "Kyiv_600",
+                        fontSize: 14,
+                        color: theme.colors.text,
+                      }}
+                    >
+                      {item.fullName}
+                    </Text>
+                  )}
+
+                  {item.bio && (
+                    <Text
+                      style={{
+                        fontFamily: "Kyiv_400",
+                        color: theme.colors.text,
+                        opacity: 0.7,
+                      }}
+                    >
+                      {item.bio}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* BUSINESS */}
               <Text
                 style={{
                   fontFamily: "Kyiv_600",
@@ -249,6 +314,7 @@ export default function AdminApplications() {
                 {item.description}
               </Text>
 
+              {/* ACTIONS */}
               <View
                 style={{
                   flexDirection: "row",
