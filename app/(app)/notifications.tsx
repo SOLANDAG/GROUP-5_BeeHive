@@ -36,7 +36,10 @@ export default function NotificationsScreen() {
 
   const fetchNotifications = async () => {
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -82,7 +85,7 @@ export default function NotificationsScreen() {
 
       if (item.conversationId) {
         router.push({
-          pathname: "/(app)/messages",
+          pathname: "/(app)/chat",
           params: {
             conversationId: item.conversationId,
             bookingId: item.bookingId || "",
@@ -121,36 +124,26 @@ export default function NotificationsScreen() {
       </Text>
 
       {loading ? (
-        <View style={{ paddingTop: 40, alignItems: "center" }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       ) : items.length === 0 ? (
-        <View
+        <Text
           style={{
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-            borderWidth: 1,
-            borderRadius: 18,
-            padding: 18,
+            fontFamily: "Kyiv_400",
+            color: theme.colors.text,
+            opacity: 0.7,
           }}
         >
-          <Text
-            style={{
-              fontFamily: "Kyiv_600",
-              fontSize: 16,
-              color: theme.colors.text,
-            }}
-          >
-            No notifications yet
-          </Text>
-        </View>
+          No notifications yet.
+        </Text>
       ) : (
         items.map((item) => (
           <Pressable
             key={item.id}
             onPress={() => openNotification(item)}
             style={{
-              backgroundColor: item.isRead ? theme.colors.card : theme.colors.primarySoft,
+              backgroundColor: item.isRead
+                ? theme.colors.card
+                : theme.colors.searchBg,
               borderColor: theme.colors.border,
               borderWidth: 1,
               borderRadius: 18,
@@ -163,6 +156,7 @@ export default function NotificationsScreen() {
                 fontFamily: "Kyiv_700",
                 fontSize: 16,
                 color: theme.colors.text,
+                marginBottom: 6,
               }}
             >
               {item.title}
@@ -171,26 +165,24 @@ export default function NotificationsScreen() {
             <Text
               style={{
                 fontFamily: "Kyiv_400",
-                fontSize: 14,
                 color: theme.colors.text,
                 opacity: 0.85,
-                marginTop: 6,
-                lineHeight: 20,
               }}
             >
               {item.body}
             </Text>
 
-            <Text
-              style={{
-                fontFamily: "Kyiv_500",
-                fontSize: 12,
-                color: theme.colors.primary,
-                marginTop: 10,
-              }}
-            >
-              Tap to open
-            </Text>
+            {!item.isRead && (
+              <Text
+                style={{
+                  marginTop: 8,
+                  fontFamily: "Kyiv_600",
+                  color: theme.colors.primary,
+                }}
+              >
+                Tap to open
+              </Text>
+            )}
           </Pressable>
         ))
       )}

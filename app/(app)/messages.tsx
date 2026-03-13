@@ -6,103 +6,100 @@ import {
   Pressable,
   ActivityIndicator,
 } from "react-native";
-
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
-import { router } from "expo-router";
-
+import { router, useLocalSearchParams } from "expo-router";
 import {
   collection,
   query,
   where,
   getDocs,
-  doc,
-  getDoc
+  orderBy,
 } from "firebase/firestore";
 
-export default function Messages() {
+type ConversationItem = {
+  id: string;
+  businessName: string;
+  lastMessage: string;
+  bookingId?: string;
+  providerId?: string;
+  customerId?: string;
+};
 
+export default function Messages() {
   const { theme } = useTheme();
   const user = auth.currentUser;
+  const params = useLocalSearchParams();
 
-  const [conversations, setConversations] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchConversations = async () => {
-
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
-
       const q = query(
         collection(db, "conversations"),
-        where("participants", "array-contains", user.uid)
+        where("participants", "array-contains", user.uid),
+        orderBy("lastMessageAt", "desc")
       );
 
       const snap = await getDocs(q);
 
-      const rawList = await Promise.all(
-        snap.docs.map(async (docSnap) => {
+      const list = snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          businessName: data.businessName || "Conversation",
+          lastMessage: data.lastMessage || "",
+          bookingId: data.bookingId || "",
+          providerId: data.providerId || "",
+          customerId: data.customerId || "",
+        };
+      });
 
-          const data = docSnap.data();
-
-          let businessName = "Service";
-
-          if (data.serviceId) {
-            const serviceDoc = await getDoc(doc(db, "services", data.serviceId));
-
-            if (serviceDoc.exists()) {
-              businessName = serviceDoc.data().businessName;
-            }
-          }
-
-          return {
-            id: docSnap.id,
-            bookingId: data.bookingId,
-            businessName,
-            createdAt: data.createdAt?.seconds || 0
-          };
-        })
-      );
-
-      /* REMOVE DUPLICATES */
-
-      const unique = Array.from(
-        new Map(rawList.map(item => [item.id, item])).values()
-      );
-
-      /* SORT NEWEST FIRST */
-
-      unique.sort((a, b) => b.createdAt - a.createdAt);
-
-      setConversations(unique);
-
-    } catch (e) {
-      console.log(e);
+      setConversations(list);
+    } catch (error) {
+      console.log("Fetch conversations error:", error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchConversations();
   }, []);
 
+  useEffect(() => {
+    if (params?.conversationId) {
+      router.push({
+        pathname: "/(app)/chat",
+        params: {
+          conversationId: String(params.conversationId),
+          bookingId: String(params.bookingId || ""),
+        },
+      });
+    }
+  }, [params?.conversationId]);
+
   return (
-    <View
+    <ScrollView
       style={{
         flex: 1,
         backgroundColor: theme.colors.bg,
         padding: 20,
       }}
+      contentContainerStyle={{ paddingBottom: 120 }}
     >
-
       <Text
         style={{
           fontFamily: "Kyiv_700",
           fontSize: 24,
           color: theme.colors.text,
-          marginBottom: 20,
+          marginBottom: 16,
         }}
       >
         Messages
@@ -111,7 +108,6 @@ export default function Messages() {
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} />
       ) : conversations.length === 0 ? (
-
         <Text
           style={{
             fontFamily: "Kyiv_400",
@@ -121,64 +117,52 @@ export default function Messages() {
         >
           No conversations yet.
         </Text>
-
       ) : (
-
-        <ScrollView showsVerticalScrollIndicator={false}>
-
-          {conversations.map((chat) => (
-
-            <Pressable
-              key={chat.id}
-              onPress={() =>
-                router.push({
-                  pathname: "/(app)/chat",
-                  params: {
-                    conversationId: chat.id,
-                    bookingId: chat.bookingId,
-                  },
-                })
-              }
+        conversations.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() =>
+              router.push({
+                pathname: "/(app)/chat",
+                params: {
+                  conversationId: item.id,
+                  bookingId: item.bookingId || "",
+                },
+              })
+            }
+            style={{
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              marginBottom: 12,
+            }}
+          >
+            <Text
               style={{
-                backgroundColor: theme.colors.card,
-                padding: 16,
-                borderRadius: 18,
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
+                fontFamily: "Kyiv_700",
+                fontSize: 18,
+                color: theme.colors.primary,
+                marginBottom: 6,
               }}
             >
+              {item.businessName}
+            </Text>
 
-              <Text
-                style={{
-                  fontFamily: "Kyiv_700",
-                  fontSize: 16,
-                  color: theme.colors.primary,
-                }}
-              >
-                {chat.businessName}
-              </Text>
-
-              <Text
-                style={{
-                  fontFamily: "Kyiv_400",
-                  fontSize: 14,
-                  marginTop: 4,
-                  color: theme.colors.text,
-                  opacity: 0.7,
-                }}
-              >
-                Tap to open chat
-              </Text>
-
-            </Pressable>
-
-          ))}
-
-        </ScrollView>
-
+            <Text
+              style={{
+                fontFamily: "Kyiv_400",
+                color: theme.colors.text,
+                opacity: 0.85,
+              }}
+              numberOfLines={2}
+            >
+              {item.lastMessage || "Open conversation"}
+            </Text>
+          </Pressable>
+        ))
       )}
-
-    </View>
+    </ScrollView>
   );
 }
