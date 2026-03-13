@@ -6,8 +6,8 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Alert,
 } from "react-native";
-
 import {
   collection,
   getDocs,
@@ -16,9 +16,10 @@ import {
   getDoc,
   query,
   where,
-  addDoc
+  setDoc,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-
 import { db, auth } from "@/lib/firebase";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { router } from "expo-router";
@@ -30,12 +31,11 @@ type Application = {
   category: string;
   description: string;
   location?: string;
+  price?: number;
   status: string;
-
   availableDays?: string[];
   startTime?: string;
   endTime?: string;
-
   fullName?: string;
   photoURL?: string;
   bio?: string;
@@ -48,9 +48,6 @@ export default function AdminApplications() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ================================
-  // CHECK ADMIN
-  // ================================
   useEffect(() => {
     const checkAdmin = async () => {
       const user = auth.currentUser;
@@ -69,7 +66,6 @@ export default function AdminApplications() {
         }
 
         const data = snap.data();
-        console.log("Admin user data:", data);
 
         if (data.admin !== true) {
           router.replace("/(app)/home");
@@ -86,9 +82,6 @@ export default function AdminApplications() {
     checkAdmin();
   }, []);
 
-  // ================================
-  // FETCH APPLICATIONS
-  // ================================
   const fetchApplications = async () => {
     try {
       setLoading(true);
@@ -99,17 +92,14 @@ export default function AdminApplications() {
       );
 
       const snap = await getDocs(q);
-
       const list: Application[] = [];
 
       for (const docSnap of snap.docs) {
         const data = docSnap.data();
 
         let profile: any = {};
-
         try {
           const userSnap = await getDoc(doc(db, "users", docSnap.id));
-
           if (userSnap.exists()) {
             profile = userSnap.data();
           }
@@ -120,18 +110,18 @@ export default function AdminApplications() {
         list.push({
           id: docSnap.id,
           userId: docSnap.id,
-          businessName: data.businessName,
-          category: data.category,
-          description: data.description,
-          location: data.location,
-          status: data.status,
-
-          fullName: profile.fullName,
-          photoURL: profile.photoURL,
-          bio: profile.bio,
+          businessName: data.businessName || "",
+          category: data.category || "",
+          description: data.description || "",
+          location: data.location || "",
+          price: data.price || 0,
+          status: data.status || "pending",
+          fullName: profile.fullName || "",
+          photoURL: profile.photoURL || "",
+          bio: profile.bio || "",
           availableDays: data.availableDays || [],
-          startTime: data.startTime,
-          endTime: data.endTime,
+          startTime: data.startTime || "",
+          endTime: data.endTime || "",
         });
       }
 
@@ -144,81 +134,78 @@ export default function AdminApplications() {
   };
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchApplications();
-    }
+    if (isAdmin) fetchApplications();
   }, [isAdmin]);
 
-  // ================================
-  // APPROVE
-  // ================================
   const approveApplication = async (app: Application) => {
     try {
-
-      // Make user a provider
       await updateDoc(doc(db, "users", app.userId), {
         "roles.provider": true,
         providerStatus: "approved",
       });
 
-      // Update application status
       await updateDoc(doc(db, "providerApplications", app.id), {
         status: "approved",
+        updatedAt: serverTimestamp(),
       });
 
-      // Create service entry
-      // Create service entry
-          await addDoc(collection(db, "services"), {
-            providerId: app.userId,
-            serviceName: app.businessName,
-            businessName: app.businessName,
-            category: app.category,
-            description: app.description,
-            location: app.location || "",
-            availableDays: app.availableDays || [],
-            startTime: app.startTime || "",
-            endTime: app.endTime || "",
-            isActive: true,
-            createdAt: new Date(),
-          });
+      await setDoc(
+        doc(db, "services", app.userId),
+        {
+          providerId: app.userId,
+          applicationId: app.id,
+          businessName: app.businessName,
+          category: app.category,
+          description: app.description,
+          location: app.location || "",
+          price: app.price || 0,
+          availableDays: app.availableDays || [],
+          startTime: app.startTime || "",
+          endTime: app.endTime || "",
+          isActive: true,
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-          // Notify provider that application got approved
-          await addDoc(collection(db, "notifications"), {
-            userId: app.userId,
-            title: "Application Approved",
-            body: "Your service provider application has been approved.",
-            type: "provider_approved",
-            isRead: false,
-            createdAt: new Date(),
-          });
+      await addDoc(collection(db, "notifications"), {
+        userId: app.userId,
+        title: "Application Approved",
+        body: "Your service provider application has been approved.",
+        type: "provider_approved",
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
 
+      Alert.alert("Success", "Application approved and service is now live.");
       fetchApplications();
-
     } catch (error) {
       console.log("Approve error:", error);
+      Alert.alert("Error", "Failed to approve application.");
     }
   };
 
-  // ================================
-  // REJECT
-  // ================================
   const rejectApplication = async (app: Application) => {
     try {
       await updateDoc(doc(db, "providerApplications", app.id), {
         status: "rejected",
+        updatedAt: serverTimestamp(),
+      });
+
+      await updateDoc(doc(db, "users", app.userId), {
+        providerStatus: "rejected",
       });
 
       fetchApplications();
     } catch (error) {
       console.log("Reject error:", error);
+      Alert.alert("Error", "Failed to reject application.");
     }
   };
 
   if (!isAdmin) return null;
 
-  // ================================
-  // LOADING
-  // ================================
   if (loading) {
     return (
       <View
@@ -226,6 +213,7 @@ export default function AdminApplications() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
+          backgroundColor: theme.colors.bg,
         }}
       >
         <ActivityIndicator />
@@ -233,9 +221,6 @@ export default function AdminApplications() {
     );
   }
 
-  // ================================
-  // SCREEN
-  // ================================
   return (
     <View
       style={{
@@ -280,15 +265,10 @@ export default function AdminApplications() {
                 marginBottom: 16,
               }}
             >
-              {/* PROFILE */}
               <View style={{ flexDirection: "row", marginBottom: 10 }}>
-                {item.photoURL && (
+                {item.photoURL ? (
                   <Image
-                    source={
-                      item.photoURL
-                        ? { uri: item.photoURL }
-                        : require("@/app/assets/images/profile.jpg")
-                    }
+                    source={{ uri: item.photoURL }}
                     style={{
                       width: 60,
                       height: 60,
@@ -296,10 +276,10 @@ export default function AdminApplications() {
                       marginRight: 12,
                     }}
                   />
-                )}
+                ) : null}
 
                 <View style={{ flex: 1 }}>
-                  {item.fullName && (
+                  {!!item.fullName && (
                     <Text
                       style={{
                         fontFamily: "Kyiv_600",
@@ -311,7 +291,7 @@ export default function AdminApplications() {
                     </Text>
                   )}
 
-                  {item.bio && (
+                  {!!item.bio && (
                     <Text
                       style={{
                         fontFamily: "Kyiv_400",
@@ -325,11 +305,10 @@ export default function AdminApplications() {
                 </View>
               </View>
 
-              {/* BUSINESS */}
               <Text
                 style={{
-                  fontFamily: "Kyiv_600",
-                  fontSize: 16,
+                  fontFamily: "Kyiv_700",
+                  fontSize: 17,
                   color: theme.colors.text,
                 }}
               >
@@ -353,6 +332,16 @@ export default function AdminApplications() {
                   marginTop: 4,
                 }}
               >
+                Price: ₱{Number(item.price || 0).toLocaleString()}
+              </Text>
+
+              <Text
+                style={{
+                  fontFamily: "Kyiv_400",
+                  color: theme.colors.text,
+                  marginTop: 4,
+                }}
+              >
                 {item.description}
               </Text>
 
@@ -364,11 +353,11 @@ export default function AdminApplications() {
                     marginTop: 6,
                   }}
                 >
-                  Days: {item.availableDays.join(", ")}
+                  Days: {item.availableDays.join(" | ")}
                 </Text>
               )}
 
-              {item.startTime && item.endTime && (
+              {!!item.startTime && !!item.endTime && (
                 <Text
                   style={{
                     fontFamily: "Kyiv_400",
@@ -380,7 +369,6 @@ export default function AdminApplications() {
                 </Text>
               )}
 
-              {/* ACTIONS */}
               <View
                 style={{
                   flexDirection: "row",
@@ -391,17 +379,12 @@ export default function AdminApplications() {
                 <Pressable
                   onPress={() => approveApplication(item)}
                   style={{
-                    backgroundColor: "#4CAF50",
+                    backgroundColor: "#43A047",
                     padding: 10,
                     borderRadius: 10,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontFamily: "Kyiv_600",
-                    }}
-                  >
+                  <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
                     Approve
                   </Text>
                 </Pressable>
@@ -414,12 +397,7 @@ export default function AdminApplications() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontFamily: "Kyiv_600",
-                    }}
-                  >
+                  <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
                     Reject
                   </Text>
                 </Pressable>

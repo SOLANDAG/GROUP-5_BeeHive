@@ -1,344 +1,266 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
-  Pressable,
   ActivityIndicator,
+  Pressable,
+  StyleSheet,
 } from "react-native";
+
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
-import { router } from "expo-router";
+
 import {
   collection,
-  getDocs,
-  orderBy,
   query,
   where,
+  getDocs,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 
-type Booking = {
-  id: string;
-  bookingId?: string;
-  providerId: string;
-  customerId: string;
-  businessName: string;
-  category: string;
-  description: string;
-  requestedDay?: string;
-  requestedTime?: string;
-  status: string;
-  serviceId?: string;
-};
-
-type UserRoleInfo = {
-  isProvider: boolean;
-  isCustomer: boolean;
-};
-
-export default function BookScreen() {
+export default function Book() {
   const { theme } = useTheme();
+  const user = auth.currentUser;
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [roleInfo, setRoleInfo] = useState<UserRoleInfo>({
-    isProvider: false,
-    isCustomer: true,
-  });
 
   const fetchBookings = async () => {
-    const user = auth.currentUser;
     if (!user) return;
 
     try {
-      setLoading(true);
-
-      const roleSnap = await getDocs(
-        query(collection(db, "users"), where("__name__", "==", user.uid))
-      );
-
-      if (!roleSnap.empty) {
-        const data = roleSnap.docs[0].data();
-        setRoleInfo({
-          isProvider: !!data?.roles?.provider,
-          isCustomer: !!data?.roles?.customer,
-        });
-      }
-
-      const providerQ = query(
+      const q = query(
         collection(db, "bookings"),
-        where("providerId", "==", user.uid)
+        where("customerId", "==", user.uid),
+        where("status", "==", "accepted")
       );
 
-      const customerQ = query(
-        collection(db, "bookings"),
-        where("customerId", "==", user.uid)
-      );
+      const snap = await getDocs(q);
 
-      const [providerSnap, customerSnap] = await Promise.all([
-        getDocs(providerQ),
-        getDocs(customerQ),
-      ]);
+      const list = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-      const map = new Map<string, Booking>();
-
-      providerSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        map.set(docSnap.id, {
-          id: docSnap.id,
-          providerId: data.providerId,
-          customerId: data.customerId,
-          businessName: data.businessName || "Service",
-          category: data.category || "",
-          description: data.description || "",
-          requestedDay: data.requestedDay || "",
-          requestedTime: data.requestedTime || "",
-          status: data.status || "pending",
-          serviceId: data.serviceId || "",
-        });
-      });
-
-      customerSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        map.set(docSnap.id, {
-          id: docSnap.id,
-          providerId: data.providerId,
-          customerId: data.customerId,
-          businessName: data.businessName || "Service",
-          category: data.category || "",
-          description: data.description || "",
-          requestedDay: data.requestedDay || "",
-          requestedTime: data.requestedTime || "",
-          status: data.status || "pending",
-          serviceId: data.serviceId || "",
-        });
-      });
-
-      setBookings(Array.from(map.values()));
-    } catch (error) {
-      console.log("Fetch bookings error:", error);
-    } finally {
-      setLoading(false);
+      setBookings(list);
+    } catch (e) {
+      console.log(e);
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  const openConversationFromBooking = async (booking: Booking) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
+  const cancelBooking = async (bookingId: string) => {
     try {
-      const conversationQ = query(
-        collection(db, "conversations"),
-        where("bookingId", "==", booking.id)
-      );
+      const bookingRef = doc(db, "bookings", bookingId);
 
-      const snap = await getDocs(conversationQ);
+      await updateDoc(bookingRef, {
+        status: "cancelled",
+      });
 
-      if (!snap.empty) {
-        router.push({
-          pathname: "/(app)/messages",
-          params: {
-            conversationId: snap.docs[0].id,
-            bookingId: booking.id,
-          },
-        });
-      }
-    } catch (error) {
-      console.log("Open conversation error:", error);
+      fetchBookings();
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const markDone = async (bookingId: string) => {
+    try {
+      const bookingRef = doc(db, "bookings", bookingId);
+
+      await updateDoc(bookingRef, {
+        status: "completed",
+      });
+
+      fetchBookings();
+    } catch (e) {
+      console.log(e);
     }
   };
 
   return (
-    <ScrollView
+    <View
       style={{
         flex: 1,
         backgroundColor: theme.colors.bg,
         padding: 20,
       }}
-      contentContainerStyle={{ paddingBottom: 120 }}
     >
       <Text
         style={{
           fontFamily: "Kyiv_700",
           fontSize: 24,
           color: theme.colors.text,
-          marginBottom: 8,
-        }}
-      >
-        Requests & Bookings
-      </Text>
-
-      <Text
-        style={{
-          fontFamily: "Kyiv_400",
-          fontSize: 14,
-          color: theme.colors.text,
-          opacity: 0.7,
           marginBottom: 18,
-          lineHeight: 20,
         }}
       >
-        Customers can track their booking requests here, while providers can review new requests and continue the conversation.
+        My Bookings
       </Text>
 
       {loading ? (
-        <View style={{ paddingTop: 40, alignItems: "center" }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       ) : bookings.length === 0 ? (
-        <View
+        <Text
           style={{
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-            borderWidth: 1,
-            borderRadius: 20,
-            padding: 18,
+            fontFamily: "Kyiv_400",
+            color: theme.colors.text,
+            opacity: 0.7,
           }}
         >
-          <Text
-            style={{
-              fontFamily: "Kyiv_600",
-              fontSize: 16,
-              color: theme.colors.text,
-            }}
-          >
-            No bookings yet
-          </Text>
-          <Text
-            style={{
-              fontFamily: "Kyiv_400",
-              fontSize: 14,
-              color: theme.colors.text,
-              opacity: 0.75,
-              marginTop: 8,
-              lineHeight: 20,
-            }}
-          >
-            Once someone books a service or starts a booking conversation, it will appear here.
-          </Text>
-        </View>
+          No accepted bookings yet.
+        </Text>
       ) : (
-        bookings.map((item) => (
-          <View
-            key={item.id}
-            style={{
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-              borderWidth: 1,
-              borderRadius: 20,
-              padding: 18,
-              marginBottom: 14,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: "Kyiv_700",
-                fontSize: 18,
-                color: theme.colors.primary,
-              }}
-            >
-              {item.businessName}
-            </Text>
-
-            <Text
-              style={{
-                fontFamily: "Kyiv_500",
-                fontSize: 13,
-                color: theme.colors.text,
-                opacity: 0.75,
-                marginTop: 4,
-              }}
-            >
-              {item.category}
-            </Text>
-
-            <Text
-              style={{
-                fontFamily: "Kyiv_400",
-                fontSize: 14,
-                color: theme.colors.text,
-                lineHeight: 21,
-                marginTop: 8,
-              }}
-            >
-              {item.description}
-            </Text>
-
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {bookings.map((item) => (
             <View
-              style={{
-                height: 2,
-                borderRadius: 999,
-                backgroundColor: theme.colors.border,
-                marginVertical: 12,
-              }}
-            />
-
-            <Text
-              style={{
-                fontFamily: "Kyiv_600",
-                fontSize: 14,
-                color: theme.colors.text,
-                marginBottom: 4,
-              }}
+              key={item.id}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                },
+              ]}
             >
-              Day: {item.requestedDay || "Not yet set"}
-            </Text>
+              <Text style={styles.date}>
+                {item.scheduledDate || "Date not set"}
+              </Text>
 
-            <Text
-              style={{
-                fontFamily: "Kyiv_400",
-                fontSize: 14,
-                color: theme.colors.text,
-                marginBottom: 6,
-              }}
-            >
-              Time: {item.requestedTime || "Not yet set"}
-            </Text>
+              <Text
+                style={[
+                  styles.title,
+                  { color: theme.colors.primary },
+                ]}
+              >
+                {item.businessName}
+              </Text>
 
-            <Text
-              style={{
-                fontFamily: "Kyiv_700",
-                fontSize: 13,
-                color:
-                  item.status === "accepted"
-                    ? "#43A047"
-                    : item.status === "completed"
-                    ? "#1E88E5"
-                    : item.status === "cancelled"
-                    ? "#E53935"
-                    : "#FB8C00",
-              }}
-            >
-              Status: {item.status.toUpperCase()}
-            </Text>
+              <Text
+                style={[
+                  styles.subtitle,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Appointment
+              </Text>
 
-            <Pressable
-              onPress={() => openConversationFromBooking(item)}
-              style={{
-                marginTop: 14,
-                backgroundColor: theme.colors.primary,
-                paddingVertical: 12,
-                borderRadius: 14,
-                alignItems: "center",
-              }}
-            >
+              <Text
+                style={[
+                  styles.time,
+                  { color: theme.colors.text },
+                ]}
+              >
+                {item.scheduledTime || "Time not set"}
+              </Text>
+
+              {/* PRICE */}
+
               <Text
                 style={{
                   fontFamily: "Kyiv_700",
-                  color: "#fff",
-                  fontSize: 14,
+                  color: theme.colors.text,
+                  marginTop: 8,
                 }}
               >
-                Open Conversation
+                Price: ₱{item.price ?? 0}
               </Text>
-            </Pressable>
-          </View>
-        ))
+
+              {/* ACTION BUTTONS */}
+
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => cancelBooking(item.id)}
+                  style={[
+                    styles.cancelBtn,
+                    { borderColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.text,
+                      fontFamily: "Kyiv_600",
+                    }}
+                  >
+                    Cancel
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => markDone(item.id)}
+                  style={[
+                    styles.doneBtn,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontFamily: "Kyiv_700",
+                    }}
+                  >
+                    Done
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
       )}
-    </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+  },
+
+  date: {
+    fontFamily: "Kyiv_700",
+    fontSize: 18,
+    marginBottom: 4,
+  },
+
+  title: {
+    fontFamily: "Kyiv_700",
+    fontSize: 20,
+  },
+
+  subtitle: {
+    fontFamily: "Kyiv_400",
+    marginTop: 4,
+  },
+
+  time: {
+    fontFamily: "Kyiv_600",
+    marginTop: 6,
+  },
+
+  actions: {
+    flexDirection: "row",
+    marginTop: 14,
+    justifyContent: "space-between",
+  },
+
+  cancelBtn: {
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+
+  doneBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+});

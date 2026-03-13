@@ -8,19 +8,23 @@ import {
   TextInput,
   Dimensions,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
+
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme/ThemeProvider";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { router } from "expo-router";
 
 import {
   collection,
   getDocs,
   query,
+  addDoc,
+  serverTimestamp,
   where,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 const { width } = Dimensions.get("window");
 
@@ -40,10 +44,11 @@ export default function Home() {
   const [services, setServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
 
+  const [loadingChat, setLoadingChat] = useState(false);
+
   const fetchServices = async () => {
     try {
       const q = query(collection(db, "services"));
-
       const snap = await getDocs(q);
 
       const list = snap.docs.map((doc) => ({
@@ -136,9 +141,111 @@ export default function Home() {
     );
   };
 
+  // =============================
+  // MESSAGE + BOOK FUNCTION
+  // =============================
+
+    const handleMessage = async (service: any) => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (loadingChat) return;
+
+      setLoadingChat(true);
+
+      try {
+        // 1) CHECK IF CONVERSATION ALREADY EXISTS
+        const existingQuery = query(
+          collection(db, "conversations"),
+          where("serviceId", "==", service.id),
+          where("customerId", "==", user.uid)
+        );
+
+        const existingSnap = await getDocs(existingQuery);
+
+        if (!existingSnap.empty) {
+          const existingConversation = existingSnap.docs[0];
+          const existingData = existingConversation.data();
+
+          router.push({
+            pathname: "/(app)/chat",
+            params: {
+              conversationId: existingConversation.id,
+              bookingId: existingData.bookingId,
+            },
+          });
+
+          setLoadingChat(false);
+          return;
+        }
+
+        // 2) CREATE BOOKING
+        const bookingRef = await addDoc(collection(db, "bookings"), {
+          serviceId: service.id,
+          providerId: service.providerId,
+          customerId: user.uid,
+          businessName: service.businessName,
+          category: service.category,
+          description: service.description,
+          price: service.price ?? 0,
+          status: "pending",
+          scheduledDate: "",
+          scheduledTime: "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // 3) CREATE CONVERSATION
+        const conversationRef = await addDoc(collection(db, "conversations"), {
+          bookingId: bookingRef.id,
+          serviceId: service.id,
+          providerId: service.providerId,
+          customerId: user.uid,
+          participants: [service.providerId, user.uid],
+          businessName: service.businessName,
+          lastMessage: `Hello! I want to inquire about ${service.businessName}.`,
+          lastMessageAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
+
+        // 4) CREATE FIRST MESSAGE
+        await addDoc(collection(db, "messages"), {
+          conversationId: conversationRef.id,
+          senderId: user.uid,
+          text: `Hello! I want to inquire about ${service.businessName}.`,
+          createdAt: serverTimestamp(),
+        });
+
+        // 5) OPTIONAL: NOTIFY PROVIDER
+        await addDoc(collection(db, "notifications"), {
+          userId: service.providerId,
+          title: "New Booking Request",
+          body: `${user.email || "A customer"} messaged about ${service.businessName}.`,
+          type: "new_booking",
+          bookingId: bookingRef.id,
+          conversationId: conversationRef.id,
+          isRead: false,
+          createdAt: serverTimestamp(),
+        });
+
+        // 6) GO TO CHAT IMMEDIATELY
+        router.push({
+          pathname: "/(app)/chat",
+          params: {
+            conversationId: conversationRef.id,
+            bookingId: bookingRef.id,
+          },
+        });
+      } catch (e) {
+        console.log("Message error", e);
+      } finally {
+        setLoadingChat(false);
+      }
+    };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      {/* HEADER CARD */}
+
+      {/* HEADER CARD (UNCHANGED) */}
       <Animated.View
         style={[
           styles.headerCard,
@@ -159,7 +266,6 @@ export default function Home() {
             style={styles.gradient}
           />
 
-          {/* GREETING */}
           <Animated.View
             style={[
               styles.greetingWrapper,
@@ -185,20 +291,12 @@ export default function Home() {
             </Text>
           </Animated.View>
 
-          {/* TYPED QUESTION */}
           {typedText.length > 0 && (
             <Text style={styles.typedText}>
               {renderTypedText()}
             </Text>
           )}
 
-          {showTyping && (
-            <Text style={styles.typedText}>
-              {renderTypedText()}
-            </Text>
-          )}
-
-          {/* SEARCH BAR */}
           <View style={styles.searchWrapper}>
             <View
               style={[
@@ -306,6 +404,17 @@ export default function Home() {
                 {item.description}
               </Text>
 
+              <Text
+                style={{
+                  fontFamily: "Kyiv_700",
+                  fontSize: 15,
+                  color: theme.colors.primary,
+                  marginBottom: 8,
+                }}
+              >
+                Price: ₱{item.price}
+              </Text>
+
               <View
                 style={{
                   height: 2,
@@ -334,6 +443,31 @@ export default function Home() {
               <Text style={{ color: theme.colors.text }}>
                 {item.startTime} - {item.endTime}
               </Text>
+
+              {/* MESSAGE BUTTON */}
+
+              <Pressable
+                onPress={() => {
+                  if (!loadingChat) handleMessage(item);
+                }}
+                style={{
+                  marginTop: 14,
+                  backgroundColor: theme.colors.primary,
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Kyiv_700",
+                    color: "#fff",
+                  }}
+                >
+                  Message & Book
+                </Text>
+              </Pressable>
+
             </View>
           ))
         )}

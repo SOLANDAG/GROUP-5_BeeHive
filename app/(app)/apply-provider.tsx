@@ -7,31 +7,28 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
-
 import {
   doc,
   setDoc,
   getDoc,
   deleteDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ApplyProviderScreen() {
   const { theme } = useTheme();
-
   const user = auth.currentUser;
 
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [price, setPrice] = useState("");
 
   const [status, setStatus] = useState<string | null>(null);
-
   const [availableDays, setAvailableDays] = useState<string[]>([]);
 
   const [startTimeDate, setStartTimeDate] = useState<Date>(new Date());
@@ -39,18 +36,6 @@ export default function ApplyProviderScreen() {
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-
-  const formatTime = (date: Date) => {
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-
-    const ampm = hours >= 12 ? "PM" : "AM";
-
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-
-    return `${hours}:${minutes} ${ampm}`;
-  };
 
   const DAYS = [
     "Monday",
@@ -62,6 +47,15 @@ export default function ApplyProviderScreen() {
     "Sunday",
   ];
 
+  const formatTime = (date: Date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
   const toggleDay = (day: string) => {
     if (availableDays.includes(day)) {
       setAvailableDays(availableDays.filter((d) => d !== day));
@@ -70,42 +64,42 @@ export default function ApplyProviderScreen() {
     }
   };
 
-  // =========================
-  // LOAD EXISTING APPLICATION
-  // =========================
-
   useEffect(() => {
-    const checkApplication = async () => {
+    const loadApplication = async () => {
       if (!user) return;
 
       try {
-        const snap = await getDoc(
-          doc(db, "providerApplications", user.uid)
-        );
+        const snap = await getDoc(doc(db, "providerApplications", user.uid));
 
         if (snap.exists()) {
           const data = snap.data();
 
-          setStatus(data.status);
-
+          setStatus(data.status || null);
           setBusinessName(data.businessName || "");
           setCategory(data.category || "");
           setDescription(data.description || "");
           setLocation(data.location || "");
+          setPrice(
+            data.price !== undefined && data.price !== null
+              ? String(data.price)
+              : ""
+          );
+          setAvailableDays(data.availableDays || []);
 
-          if (data.availableDays) setAvailableDays(data.availableDays);
+          if (data.startTime) {
+            // keep display from Firestore; picker still starts on current time
+          }
+          if (data.endTime) {
+            // same
+          }
         }
       } catch (error) {
-        console.log("Application check error:", error);
+        console.log("Load provider application error:", error);
       }
     };
 
-    checkApplication();
-  }, []);
-
-  // =========================
-  // SUBMIT / UPDATE
-  // =========================
+    loadApplication();
+  }, [user]);
 
   const handleApply = async () => {
     if (!user) {
@@ -113,21 +107,30 @@ export default function ApplyProviderScreen() {
       return;
     }
 
-    if (!businessName || !category || !description) {
+    if (!businessName || !category || !description || !price) {
       Alert.alert("Please fill all required fields.");
       return;
     }
 
+    if (availableDays.length === 0) {
+      Alert.alert("Please select at least one available day.");
+      return;
+    }
+
+    const numericPrice = Number(price);
+
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      Alert.alert("Please enter a valid price.");
+      return;
+    }
+
     try {
-      const existing = await getDoc(
-        doc(db, "providerApplications", user.uid)
-      );
+      const existing = await getDoc(doc(db, "providerApplications", user.uid));
 
       if (existing.exists()) {
         const data = existing.data();
-
         if (data.status === "approved") {
-          Alert.alert("You are already a provider.");
+          Alert.alert("You are already an approved provider.");
           return;
         }
       }
@@ -140,11 +143,15 @@ export default function ApplyProviderScreen() {
           category,
           description,
           location,
+          price: numericPrice,
           availableDays,
           startTime: formatTime(startTimeDate),
           endTime: formatTime(endTimeDate),
           status: "pending",
-          createdAt: new Date(),
+          updatedAt: serverTimestamp(),
+          createdAt: existing.exists()
+            ? existing.data()?.createdAt || serverTimestamp()
+            : serverTimestamp(),
         },
         { merge: true }
       );
@@ -158,29 +165,37 @@ export default function ApplyProviderScreen() {
       );
 
       setStatus("pending");
-
       Alert.alert("Application submitted.");
     } catch (error) {
-      console.log("Application error:", error);
+      console.log("Application submit error:", error);
       Alert.alert("Failed to submit application.");
     }
   };
-
-  // =========================
-  // CANCEL APPLICATION
-  // =========================
 
   const cancelApplication = async () => {
     if (!user) return;
 
     try {
       await deleteDoc(doc(db, "providerApplications", user.uid));
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          providerStatus: "none",
+        },
+        { merge: true }
+      );
 
       setStatus(null);
+      setBusinessName("");
+      setCategory("");
+      setDescription("");
+      setLocation("");
+      setPrice("");
+      setAvailableDays([]);
 
       Alert.alert("Application cancelled.");
     } catch (error) {
-      console.log("Cancel error:", error);
+      console.log("Cancel application error:", error);
       Alert.alert("Failed to cancel application.");
     }
   };
@@ -192,8 +207,8 @@ export default function ApplyProviderScreen() {
         backgroundColor: theme.colors.bg,
         padding: 24,
       }}
+      contentContainerStyle={{ paddingBottom: 120 }}
     >
-
       <Text
         style={{
           fontFamily: "Kyiv_700",
@@ -208,7 +223,7 @@ export default function ApplyProviderScreen() {
       {status === "pending" && (
         <Text
           style={{
-            color: "orange",
+            color: "#FB8C00",
             marginBottom: 20,
             fontFamily: "Kyiv_600",
           }}
@@ -222,6 +237,7 @@ export default function ApplyProviderScreen() {
         value={businessName}
         onChangeText={setBusinessName}
         placeholderTextColor={theme.colors.placeholder}
+        returnKeyType="next"
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
@@ -237,6 +253,7 @@ export default function ApplyProviderScreen() {
         value={category}
         onChangeText={setCategory}
         placeholderTextColor={theme.colors.placeholder}
+        returnKeyType="next"
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
@@ -269,6 +286,25 @@ export default function ApplyProviderScreen() {
         value={location}
         onChangeText={setLocation}
         placeholderTextColor={theme.colors.placeholder}
+        returnKeyType="next"
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+          color: theme.colors.text,
+          fontFamily: "Kyiv_400",
+        }}
+      />
+
+      <TextInput
+        placeholder="Price (example: 500)"
+        value={price}
+        onChangeText={setPrice}
+        keyboardType="numeric"
+        placeholderTextColor={theme.colors.placeholder}
+        returnKeyType="done"
+        onSubmitEditing={handleApply}
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,
@@ -278,8 +314,6 @@ export default function ApplyProviderScreen() {
           fontFamily: "Kyiv_400",
         }}
       />
-
-      {/* AVAILABLE DAYS */}
 
       <Text
         style={{
@@ -305,9 +339,9 @@ export default function ApplyProviderScreen() {
                 borderRadius: 20,
                 marginRight: 8,
                 marginBottom: 8,
-                backgroundColor: selected
-                  ? theme.colors.primary
-                  : theme.colors.card,
+                backgroundColor: selected ? theme.colors.primary : theme.colors.card,
+                borderWidth: 1,
+                borderColor: selected ? theme.colors.primary : theme.colors.border,
               }}
             >
               <Text
@@ -322,8 +356,6 @@ export default function ApplyProviderScreen() {
           );
         })}
       </View>
-
-      {/* AVAILABLE TIME */}
 
       <Text
         style={{
@@ -344,7 +376,7 @@ export default function ApplyProviderScreen() {
           marginBottom: 12,
         }}
       >
-        <Text style={{ color: theme.colors.text }}>
+        <Text style={{ color: theme.colors.text, fontFamily: "Kyiv_400" }}>
           Start Time: {formatTime(startTimeDate)}
         </Text>
       </Pressable>
@@ -358,7 +390,7 @@ export default function ApplyProviderScreen() {
           marginBottom: 20,
         }}
       >
-        <Text style={{ color: theme.colors.text }}>
+        <Text style={{ color: theme.colors.text, fontFamily: "Kyiv_400" }}>
           End Time: {formatTime(endTimeDate)}
         </Text>
       </Pressable>
@@ -377,9 +409,7 @@ export default function ApplyProviderScreen() {
             mode="time"
             display="spinner"
             onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                setStartTimeDate(selectedDate);
-              }
+              if (selectedDate) setStartTimeDate(selectedDate);
             }}
           />
 
@@ -393,9 +423,7 @@ export default function ApplyProviderScreen() {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
-              Done
-            </Text>
+            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>Done</Text>
           </Pressable>
         </View>
       )}
@@ -414,9 +442,7 @@ export default function ApplyProviderScreen() {
             mode="time"
             display="spinner"
             onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                setEndTimeDate(selectedDate);
-              }
+              if (selectedDate) setEndTimeDate(selectedDate);
             }}
           />
 
@@ -430,14 +456,10 @@ export default function ApplyProviderScreen() {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
-              Done
-            </Text>
+            <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>Done</Text>
           </Pressable>
         </View>
       )}
-
-      {/* SUBMIT BUTTON */}
 
       <Pressable
         onPress={handleApply}
@@ -469,7 +491,6 @@ export default function ApplyProviderScreen() {
           </Text>
         </Pressable>
       )}
-
     </ScrollView>
   );
 }
