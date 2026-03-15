@@ -1,19 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
   ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
-import { useTheme } from "@/lib/theme/ThemeProvider";
+import { collection, getDocs, query, where } from "firebase/firestore";
+
 import { auth, db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
+import { useTheme } from "@/lib/theme/ThemeProvider";
 
 type BookingItem = {
   id: string;
@@ -22,6 +18,11 @@ type BookingItem = {
   scheduledTime?: string;
   status?: string;
 };
+
+function isValidCalendarDate(value?: string) {
+  if (!value) return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
 
 export default function ScheduleScreen() {
   const { theme } = useTheme();
@@ -53,9 +54,9 @@ export default function ScheduleScreen() {
 
       const snap = await getDocs(q);
 
-      const list = snap.docs.map((docSnap) => ({
+      const list: BookingItem[] = snap.docs.map((docSnap) => ({
         id: docSnap.id,
-        ...(docSnap.data() as any),
+        ...(docSnap.data() as Omit<BookingItem, "id">),
       }));
 
       setBookings(list);
@@ -70,46 +71,63 @@ export default function ScheduleScreen() {
     fetchBookings();
   }, []);
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayIndex = new Date(year, month, 1).getDay();
+  const validBookings = useMemo(() => {
+    return bookings.filter((booking) => isValidCalendarDate(booking.scheduledDate));
+  }, [bookings]);
 
   const bookingMap = useMemo(() => {
     const map: Record<string, BookingItem[]> = {};
 
-    bookings.forEach((booking) => {
-      if (!booking.scheduledDate) return;
+    validBookings.forEach((booking) => {
+      const dateKey = booking.scheduledDate as string;
 
-      if (!map[booking.scheduledDate]) {
-        map[booking.scheduledDate] = [];
+      if (!map[dateKey]) {
+        map[dateKey] = [];
       }
 
-      map[booking.scheduledDate].push(booking);
+      map[dateKey].push(booking);
     });
 
     return map;
-  }, [bookings]);
+  }, [validBookings]);
 
-  const calendarCells = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay();
   const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
+
+  const calendarCells: Array<
+    | null
+    | {
+        dayNumber: number;
+        dateKey: string;
+        bookings: BookingItem[];
+      }
+  > = [];
 
   for (let i = 0; i < totalCells; i++) {
     const dayNumber = i - firstDayIndex + 1;
 
     if (dayNumber < 1 || dayNumber > daysInMonth) {
       calendarCells.push(null);
-    } else {
-      const monthString = String(month + 1).padStart(2, "0");
-      const dayString = String(dayNumber).padStart(2, "0");
-      const dateKey = `${year}-${monthString}-${dayString}`;
-      const dayBookings = bookingMap[dateKey] || [];
-
-      calendarCells.push({
-        dayNumber,
-        dateKey,
-        bookings: dayBookings,
-      });
+      continue;
     }
+
+    const monthString = String(month + 1).padStart(2, "0");
+    const dayString = String(dayNumber).padStart(2, "0");
+    const dateKey = `${year}-${monthString}-${dayString}`;
+
+    calendarCells.push({
+      dayNumber,
+      dateKey,
+      bookings: bookingMap[dateKey] || [],
+    });
   }
+
+  const sortedAppointments = [...validBookings].sort((a, b) => {
+    const left = `${a.scheduledDate || ""} ${a.scheduledTime || ""}`;
+    const right = `${b.scheduledDate || ""} ${b.scheduledTime || ""}`;
+    return left.localeCompare(right);
+  });
 
   return (
     <ScrollView
@@ -251,8 +269,7 @@ export default function ScheduleScreen() {
                             fontSize: 10,
                           }}
                         >
-                          {booking.scheduledTime || "Time"}{" "}
-                          {booking.businessName || "Appointment"}
+                          {booking.scheduledTime || "Time"} {booking.businessName || "Appointment"}
                         </Text>
                       </View>
                     ))}
@@ -289,7 +306,7 @@ export default function ScheduleScreen() {
         Upcoming Appointments
       </Text>
 
-      {bookings.length === 0 ? (
+      {sortedAppointments.length === 0 ? (
         <Text
           style={{
             fontFamily: "Kyiv_400",
@@ -300,56 +317,49 @@ export default function ScheduleScreen() {
           No appointments yet.
         </Text>
       ) : (
-        bookings
-          .filter((item) => item.scheduledDate)
-          .sort((a, b) =>
-            `${a.scheduledDate} ${a.scheduledTime}`.localeCompare(
-              `${b.scheduledDate} ${b.scheduledTime}`
-            )
-          )
-          .map((item) => (
-            <View
-              key={item.id}
+        sortedAppointments.map((item) => (
+          <View
+            key={item.id}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+              borderWidth: 1,
+              borderRadius: 16,
+              padding: 14,
+              marginBottom: 10,
+            }}
+          >
+            <Text
               style={{
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-                borderWidth: 1,
-                borderRadius: 16,
-                padding: 14,
-                marginBottom: 10,
+                fontFamily: "Kyiv_700",
+                color: theme.colors.primary,
+                marginBottom: 4,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: "Kyiv_700",
-                  color: theme.colors.primary,
-                  marginBottom: 4,
-                }}
-              >
-                {item.businessName || "Appointment"}
-              </Text>
+              {item.businessName || "Appointment"}
+            </Text>
 
-              <Text
-                style={{
-                  fontFamily: "Kyiv_400",
-                  color: theme.colors.text,
-                }}
-              >
-                {item.scheduledDate || "No date"} • {item.scheduledTime || "No time"}
-              </Text>
+            <Text
+              style={{
+                fontFamily: "Kyiv_400",
+                color: theme.colors.text,
+              }}
+            >
+              {item.scheduledDate || "No date"} • {item.scheduledTime || "No time"}
+            </Text>
 
-              <Text
-                style={{
-                  marginTop: 4,
-                  fontFamily: "Kyiv_400",
-                  color: theme.colors.text,
-                  opacity: 0.8,
-                }}
-              >
-                Status: {item.status || "pending"}
-              </Text>
-            </View>
-          ))
+            <Text
+              style={{
+                marginTop: 4,
+                fontFamily: "Kyiv_400",
+                color: theme.colors.text,
+                opacity: 0.8,
+              }}
+            >
+              Status: {item.status || "pending"}
+            </Text>
+          </View>
+        ))
       )}
     </ScrollView>
   );
