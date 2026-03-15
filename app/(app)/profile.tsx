@@ -48,10 +48,6 @@ export default function ProfileScreen() {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [pickedImageUri, setPickedImageUri] = useState<string | null>(null);
 
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [bio, setBio] = useState("");
 
@@ -157,17 +153,6 @@ export default function ProfileScreen() {
       return;
     }
 
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        Alert.alert("Password must be at least 6 characters.");
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        Alert.alert("Passwords do not match.");
-        return;
-      }
-    }
 
     setLoading(true);
 
@@ -209,34 +194,7 @@ export default function ProfileScreen() {
         }
       }
 
-      if (newPassword) {
-
-      if (!oldPassword) {
-        Alert.alert("Please enter your current password.");
-        return;
-      }
-
-      try {
-
-        const credential = EmailAuthProvider.credential(
-          user.email || "",
-          oldPassword
-        );
-
-        await reauthenticateWithCredential(user, credential);
-
-        await updatePassword(user, newPassword);
-
-      } catch (error: any) {
-        Alert.alert(prettyAuthError(error?.code));
-      }
-
-    }
-
-      setPickedImageUri(null);
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+    
 
       Alert.alert("Success", "Profile updated successfully.");
     } catch (error: any) {
@@ -396,65 +354,6 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
     )}
-
-      <View style={dividerStyle(theme)} />
-
-      <Text style={labelStyle(theme)}>Current Password</Text>
-
-<TextInput
-  value={oldPassword}
-  onChangeText={setOldPassword}
-  placeholder="Enter current password"
-  placeholderTextColor={theme.colors.placeholder}
-  selectionColor={theme.colors.primary}
-  secureTextEntry
-  style={inputStyle(theme)}
-/>
-
-<Pressable
-  onPress={async () => {
-    if (!user?.email) return;
-
-    await sendPasswordResetEmail(auth, user.email);
-
-    Alert.alert(
-      "Password Reset",
-      "A password reset link has been sent to your email."
-    );
-  }}
->
-  <Text
-    style={{
-      color: theme.colors.primary,
-      fontFamily: "Kyiv_500",
-      marginBottom: 12,
-    }}
-  >
-    Forgot password?
-  </Text>
-      </Pressable>
-
-      <Text style={labelStyle(theme)}>New Password</Text>
-
-      <TextInput
-        value={newPassword}
-        onChangeText={setNewPassword}
-        placeholder="New password"
-        placeholderTextColor={theme.colors.placeholder}
-        selectionColor={theme.colors.primary}
-        secureTextEntry
-        style={inputStyle(theme)}
-      />
-
-      <TextInput
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="Confirm password"
-        placeholderTextColor={theme.colors.placeholder}
-        selectionColor={theme.colors.primary}
-        secureTextEntry
-        style={inputStyle(theme)}
-      />
 
       <View style={dividerStyle(theme)} />
 

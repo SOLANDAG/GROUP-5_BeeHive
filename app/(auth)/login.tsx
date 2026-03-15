@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -20,35 +21,76 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [showOtpBanner, setShowOtpBanner] = useState(false);
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const bannerTop = useRef(new Animated.Value(-120)).current;
+
+  const showTopBanner = (otpCode: string) => {
+    setGeneratedOtp(otpCode);
+    setShowOtpBanner(true);
+
+    Animated.sequence([
+      Animated.timing(bannerTop, {
+        toValue: 50,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.delay(4000),
+      Animated.timing(bannerTop, {
+        toValue: -120,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      setShowOtpBanner(false);
+
+      router.replace({
+        pathname: "/(auth)/otp",
+        params: {
+          otp: otpCode,
+        },
+      });
+    });
+  };
+
+  const generateOtp = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
   const handleLogin = async () => {
-  if (!email || !password) {
-    setError("Please fill all fields.");
-    return;
-  }
-
-  setLoading(true);
-  setError("");
-
-  try {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-
-    // Login successful
-    router.replace("/(app)/home");
-
-  } catch (err: any) {
-    if (err.code === "auth/user-not-found") {
-      setError("Account not found.");
-    } else if (err.code === "auth/wrong-password") {
-      setError("Incorrect password.");
-    } else if (err.code === "auth/invalid-email") {
-      setError("Invalid email address.");
-    } else {
-      setError("Login failed.");
+    if (!email || !password) {
+      setError("Please fill all fields.");
+      return;
     }
-  }
 
-  setLoading(false);
-};
+    setLoading(true);
+    setError("");
+
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      const otpCode = generateOtp();
+
+      router.replace({
+        pathname: "/(auth)/otp",
+        params: { otp: otpCode },
+      });
+    } catch (err: any) {
+      if (err.code === "auth/user-not-found") {
+        setError("Account not found.");
+      } else if (err.code === "auth/wrong-password") {
+        setError("Incorrect password.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email address.");
+      } else if (err.code === "auth/invalid-credential") {
+        setError("Invalid email or password.");
+      } else {
+        setError("Login failed.");
+      }
+    }
+
+    setLoading(false);
+  };
 
   return (
     <View
@@ -59,6 +101,49 @@ export default function LoginScreen() {
         backgroundColor: theme.colors.bg,
       }}
     >
+      {showOtpBanner && (
+        <Animated.View
+          style={{
+            position: "absolute",
+            top: bannerTop,
+            left: 20,
+            right: 20,
+            zIndex: 999,
+            backgroundColor: theme.colors.primary,
+            borderRadius: 18,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            shadowColor: "#000",
+            shadowOpacity: 0.15,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 6,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: "Kyiv_700",
+              color: "#fff",
+              fontSize: 14,
+              marginBottom: 2,
+            }}
+          >
+            BeeHive Verification Code
+          </Text>
+
+          <Text
+            style={{
+              fontFamily: "Kyiv_400",
+              color: "#fff",
+              fontSize: 13,
+              opacity: 0.95,
+            }}
+          >
+            Your OTP is: {generatedOtp}
+          </Text>
+        </Animated.View>
+      )}
+
       <Text
         style={{
           fontFamily: "Kyiv_700",
@@ -112,7 +197,7 @@ export default function LoginScreen() {
       {error ? (
         <Text
           style={{
-            color: "red",
+            color: "#E53935",
             marginBottom: 12,
             fontFamily: "Kyiv_400",
           }}

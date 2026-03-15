@@ -1,29 +1,90 @@
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  TextInput,
+  Alert,
+} from "react-native";
+
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { THEMES, ThemeType } from "@/lib/theme/theme";
-import { useRouter } from "expo-router";
 import { FontAwesome5 } from "@expo/vector-icons";
-import { signOut } from "firebase/auth";
+
 import { auth } from "@/lib/firebase";
+
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from "firebase/auth";
 
 export default function SettingsScreen() {
   const { theme, themeName, setThemeName } = useTheme();
-  const router = useRouter();
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.replace("/");
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const handleChangePassword = async () => {
+    const user = auth.currentUser;
+
+    if (!user || !user.email) {
+      Alert.alert("User not found.");
+      return;
+    }
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      Alert.alert("Please fill all fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Passwords do not match.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        oldPassword
+      );
+
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      Alert.alert("Password updated successfully.");
+
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+    } catch (error: any) {
+      if (error.code === "auth/wrong-password") {
+        Alert.alert("Old password incorrect.");
+      } else {
+        Alert.alert("Password update failed.");
+      }
+    }
   };
 
   return (
+
     <ScrollView
       style={{
         flex: 1,
         backgroundColor: theme.colors.bg,
         padding: 24,
       }}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* TITLE */}
       <Text
         style={{
           fontFamily: "Kyiv_700",
@@ -35,7 +96,8 @@ export default function SettingsScreen() {
         Settings
       </Text>
 
-      {/* APPEARANCE SECTION */}
+      {/* CHANGE PASSWORD */}
+
       <Text
         style={{
           fontFamily: "Kyiv_600",
@@ -44,7 +106,91 @@ export default function SettingsScreen() {
           color: theme.colors.text,
         }}
       >
-        Appearance
+        Change Password
+      </Text>
+
+      <TextInput
+        placeholder="Old Password"
+        secureTextEntry
+        value={oldPassword}
+        onChangeText={setOldPassword}
+        placeholderTextColor={theme.colors.placeholder}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+          color: theme.colors.text,
+          fontFamily: "Kyiv_400",
+        }}
+      />
+
+      <TextInput
+        placeholder="New Password"
+        secureTextEntry
+        value={newPassword}
+        onChangeText={setNewPassword}
+        placeholderTextColor={theme.colors.placeholder}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 12,
+          color: theme.colors.text,
+          fontFamily: "Kyiv_400",
+        }}
+      />
+
+      <TextInput
+        placeholder="Confirm New Password"
+        secureTextEntry
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        placeholderTextColor={theme.colors.placeholder}
+        style={{
+          backgroundColor: theme.colors.card,
+          padding: 14,
+          borderRadius: 16,
+          marginBottom: 18,
+          color: theme.colors.text,
+          fontFamily: "Kyiv_400",
+        }}
+      />
+
+      <Pressable
+        onPress={handleChangePassword}
+        style={{
+          backgroundColor: theme.colors.primary,
+          padding: 16,
+          borderRadius: 16,
+          alignItems: "center",
+          
+        }}
+      >
+        <Text style={{ color: "#fff", fontFamily: "Kyiv_600" }}>
+          Save Password
+        </Text>
+      </Pressable>
+
+      <View
+        style={{
+          height: 1,
+          backgroundColor: theme.colors.border,
+          marginVertical: 28,
+        }}
+      />
+
+      {/* APPEARANCE */}
+
+      <Text
+        style={{
+          fontFamily: "Kyiv_600",
+          fontSize: 16,
+          marginBottom: 12,
+          color: theme.colors.text,
+        }}
+      >
+        Appearance | Theme Colors
       </Text>
 
       {Object.entries(THEMES).map(([key, value]) => (
@@ -83,76 +229,6 @@ export default function SettingsScreen() {
           )}
         </Pressable>
       ))}
-
-      {/* ACCOUNT SECTION */}
-      <Text
-        style={{
-          fontFamily: "Kyiv_600",
-          fontSize: 16,
-          marginTop: 24,
-          marginBottom: 12,
-          color: theme.colors.text,
-        }}
-      >
-        Account
-      </Text>
-
-      <Pressable
-        style={{
-          backgroundColor: theme.colors.card,
-          padding: 16,
-          borderRadius: 16,
-          marginBottom: 10,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Kyiv_500",
-            color: theme.colors.text,
-          }}
-        >
-          Change Password
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={{
-          backgroundColor: theme.colors.card,
-          padding: 16,
-          borderRadius: 16,
-          marginBottom: 10,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Kyiv_500",
-            color: theme.colors.text,
-          }}
-        >
-          Edit Profile
-        </Text>
-      </Pressable>
-
-      {/* LOGOUT */}
-      <Pressable
-        onPress={handleLogout}
-        style={{
-          backgroundColor: "#E53935",
-          padding: 16,
-          borderRadius: 16,
-          marginTop: 30,
-          alignItems: "center",
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Kyiv_600",
-            color: "#fff",
-          }}
-        >
-          Logout
-        </Text>
-      </Pressable>
     </ScrollView>
   );
 }
