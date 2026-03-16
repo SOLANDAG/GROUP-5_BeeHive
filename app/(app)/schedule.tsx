@@ -26,7 +26,6 @@ export default function ScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
   const [markedDates, setMarkedDates] = useState<any>({});
 
   useEffect(() => {
@@ -51,27 +50,21 @@ export default function ScheduleScreen() {
 
       list.forEach((b: any) => {
 
-        const date = b.date || b.bookingDate;
+        const date =
+          b.date ||
+          b.bookingDate ||
+          b.scheduledDate;
 
         if (!date) return;
 
-        let color = "#FBC02D";
-
-        if (b.status === "cancelled") {
-          color = "#E53935";
-        }
-
-        if (b.status === "completed") {
-          color = "#43A047";
-        }
-
-        if (b.status === "accepted") {
-          color = "#FB8C00";
-        }
-
         marks[date] = {
           marked: true,
-          dotColor: color,
+          dotColor:
+            b.status === "cancelled"
+              ? "#E53935"
+              : b.status === "completed"
+              ? "#43A047"
+              : "#FB8C00",
         };
       });
 
@@ -82,70 +75,50 @@ export default function ScheduleScreen() {
 
     return () => unsubscribe();
 
-  }, []);
+  }, [user?.uid]);
 
-  const dayBookings = bookings.filter(
-    (b) => (b.date || b.bookingDate) === selectedDate
-  );
+  const dayBookings = bookings.filter((b) => {
+    const d =
+      b.date ||
+      b.bookingDate ||
+      b.scheduledDate;
+
+    return d === selectedDate;
+  });
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.bg,
-      }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} />
       ) : (
         <>
-        <Calendar
-          onDayPress={(day) => {
-            setSelectedDate(day.dateString);
-          }}
-          markedDates={markedDates}
-          hideExtraDays={true}
-          theme={{
-            calendarBackground: theme.colors.bg,
-            dayTextColor: theme.colors.text,
-            monthTextColor: theme.colors.text,
-            arrowColor: theme.colors.primary,
-            textMonthFontFamily: "Kyiv_700",
-            textDayFontFamily: "Kyiv_400",
-            textDayHeaderFontFamily: "Kyiv_600",
-          }}
-        />
-
-          <ScrollView
-            style={{
-              padding: 20,
+          <Calendar
+            onDayPress={(day) => setSelectedDate(day.dateString)}
+            markedDates={markedDates}
+            hideExtraDays={true}
+            theme={{
+              calendarBackground: theme.colors.bg,
+              dayTextColor: theme.colors.text,
+              monthTextColor: theme.colors.text,
+              arrowColor: theme.colors.primary,
+              textMonthFontFamily: "Kyiv_700",
+              textDayFontFamily: "Kyiv_400",
+              textDayHeaderFontFamily: "Kyiv_600",
             }}
-          >
+          />
 
+          <ScrollView style={{ padding: 20 }}>
             {!selectedDate ? (
-              <Text
-                style={{
-                  fontFamily: "Kyiv_400",
-                  color: theme.colors.text,
-                  opacity: 0.7,
-                }}
-              >
+              <Text style={{ fontFamily: "Kyiv_400", color: theme.colors.text, opacity: 0.7 }}>
                 Tap a day to view appointments.
               </Text>
             ) : dayBookings.length === 0 ? (
-              <Text
-                style={{
-                  fontFamily: "Kyiv_400",
-                  color: theme.colors.text,
-                  opacity: 0.7,
-                }}
-              >
+              <Text style={{ fontFamily: "Kyiv_400", color: theme.colors.text, opacity: 0.7 }}>
                 No bookings on this day.
               </Text>
             ) : (
               dayBookings.map((b) => (
-
                 <View
                   key={b.id}
                   style={{
@@ -157,34 +130,15 @@ export default function ScheduleScreen() {
                     marginBottom: 14,
                   }}
                 >
-
-                  <Text
-                    style={{
-                      fontFamily: "Kyiv_700",
-                      color: theme.colors.text,
-                      fontSize: 16,
-                    }}
-                  >
+                  <Text style={{ fontFamily: "Kyiv_700", color: theme.colors.text, fontSize: 16 }}>
                     {b.businessName || "Service"}
                   </Text>
 
-                  <Text
-                    style={{
-                      fontFamily: "Kyiv_400",
-                      color: theme.colors.text,
-                      marginTop: 4,
-                    }}
-                  >
-                    Time: {b.time || b.bookingTime || "Not set"}
+                  <Text style={{ fontFamily: "Kyiv_400", color: theme.colors.text, marginTop: 4 }}>
+                    Time: {b.time || b.bookingTime || b.scheduledTime || "Not set"}
                   </Text>
 
-                  <Text
-                    style={{
-                      fontFamily: "Kyiv_400",
-                      color: theme.colors.text,
-                      marginTop: 4,
-                    }}
-                  >
+                  <Text style={{ fontFamily: "Kyiv_400", color: theme.colors.text, marginTop: 4 }}>
                     Price: ₱{b.price ?? 0}
                   </Text>
 
@@ -202,16 +156,12 @@ export default function ScheduleScreen() {
                   >
                     Status: {b.status}
                   </Text>
-
                 </View>
-
               ))
             )}
-
           </ScrollView>
         </>
       )}
-
     </View>
   );
 }
