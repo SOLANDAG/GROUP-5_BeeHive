@@ -107,7 +107,7 @@ The project uses modular routing and a component-based architecture.
 Clone the repository
 
 
-git clone https://github.com/YOUR_REPOSITORY/BeeHive.git
+git clone [https://github.com/YOUR_REPOSITORY/BeeHive.git](https://github.com/SOLANDAG/GROUP-5_BeeHive.git)
 
 
 Go to the project directory
