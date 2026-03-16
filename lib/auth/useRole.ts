@@ -3,34 +3,35 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
 export function useRole() {
-  const [roles, setRoles] = useState({
-    customer: true,
-    provider: false,
-  });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRole = async () => {
+    const checkRole = async () => {
       const user = auth.currentUser;
-      if (!user) return;
+
+      if (!user) {
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
 
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
 
         if (snap.exists()) {
           const data = snap.data();
-
-          setRoles({
-            customer: data?.roles?.customer ?? true,
-            provider: data?.roles?.provider ?? false,
-          });
+          setIsAdmin(data.admin === true);
         }
       } catch (error) {
-        console.log("Role fetch error:", error);
+        console.log("Role check error:", error);
       }
+
+      setLoading(false);
     };
 
-    fetchRole();
+    checkRole();
   }, []);
 
-  return { roles };
+  return { isAdmin, loading };
 }

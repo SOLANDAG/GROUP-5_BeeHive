@@ -129,10 +129,18 @@ export default function ApplyProviderScreen() {
 
       if (existing.exists()) {
         const data = existing.data();
+
         if (data.status === "approved") {
           Alert.alert("You are already an approved provider.");
           return;
         }
+
+        if (data.status === "pending") {
+          Alert.alert("Your application is already pending review.");
+          return;
+        }
+
+        // allow resubmission if rejected
       }
 
       await setDoc(
@@ -304,7 +312,7 @@ export default function ApplyProviderScreen() {
         keyboardType="numeric"
         placeholderTextColor={theme.colors.placeholder}
         returnKeyType="done"
-        onSubmitEditing={handleApply}
+        // remove auto submit to prevent accidental submission
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,

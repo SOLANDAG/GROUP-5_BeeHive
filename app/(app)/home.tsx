@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
 import { router } from "expo-router";
@@ -24,6 +24,7 @@ import {
   addDoc,
   serverTimestamp,
   where,
+  deleteDoc,
 } from "firebase/firestore";
 
 const { width } = Dimensions.get("window");
@@ -36,36 +37,95 @@ export default function Home() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [typedText, setTypedText] = useState("");
-  const [showTyping, setShowTyping] = useState(false);
-
   const fullText = "How can BeeHive assist you today?";
   const username = auth.currentUser?.displayName || "Guest";
 
   const [services, setServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
 
+  const [favorites, setFavorites] = useState<string[]>([]);
+
   const [loadingChat, setLoadingChat] = useState(false);
+
+  const loadFavorites = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const q = query(
+        collection(db, "favorites"),
+        where("userId", "==", user.uid)
+      );
+
+      const snap = await getDocs(q);
+      const ids = snap.docs.map((doc) => doc.data().serviceId as string);
+
+      setFavorites(ids);
+    } catch (error) {
+      console.log("Load favorites error:", error);
+    }
+  };
+
+  const toggleFavorite = async (serviceId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const q = query(
+        collection(db, "favorites"),
+        where("userId", "==", user.uid),
+        where("serviceId", "==", serviceId)
+      );
+
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        await deleteDoc(snap.docs[0].ref);
+
+        setFavorites((prev) => prev.filter((id) => id !== serviceId));
+      } else {
+        await addDoc(collection(db, "favorites"), {
+          userId: user.uid,
+          serviceId,
+          createdAt: serverTimestamp(),
+        });
+
+        setFavorites((prev) => [...prev, serviceId]);
+      }
+    } catch (error) {
+      console.log("Toggle favorite error:", error);
+    }
+  };
 
   const fetchServices = async () => {
     try {
       const q = query(collection(db, "services"));
       const snap = await getDocs(q);
 
-      const list = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const user = auth.currentUser;
+
+      const list = snap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter(
+          (service: any) =>
+            service.providerId !== user?.uid &&
+            service.isActive === true
+        );
 
       setServices(list);
     } catch (e) {
-      console.log(e);
+      console.log("Fetch services error:", e);
+    } finally {
+      setLoadingServices(false);
     }
-
-    setLoadingServices(false);
   };
 
   useEffect(() => {
     fetchServices();
+    loadFavorites();
   }, []);
 
   const headerHeight = scrollY.interpolate({
@@ -141,111 +201,99 @@ export default function Home() {
     );
   };
 
-  // =============================
-  // MESSAGE + BOOK FUNCTION
-  // =============================
+  const handleMessage = async (service: any) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    if (loadingChat) return;
 
-    const handleMessage = async (service: any) => {
-      const user = auth.currentUser;
-      if (!user) return;
-      if (loadingChat) return;
+    setLoadingChat(true);
 
-      setLoadingChat(true);
+    try {
+      const existingQuery = query(
+        collection(db, "conversations"),
+        where("serviceId", "==", service.id),
+        where("customerId", "==", user.uid)
+      );
 
-      try {
-        // 1) CHECK IF CONVERSATION ALREADY EXISTS
-        const existingQuery = query(
-          collection(db, "conversations"),
-          where("serviceId", "==", service.id),
-          where("customerId", "==", user.uid)
-        );
+      const existingSnap = await getDocs(existingQuery);
 
-        const existingSnap = await getDocs(existingQuery);
+      if (!existingSnap.empty) {
+        const existingConversation = existingSnap.docs[0];
+        const existingData = existingConversation.data();
 
-        if (!existingSnap.empty) {
-          const existingConversation = existingSnap.docs[0];
-          const existingData = existingConversation.data();
-
-          router.push({
-            pathname: "/(app)/chat",
-            params: {
-              conversationId: existingConversation.id,
-              bookingId: existingData.bookingId,
-            },
-          });
-
-          setLoadingChat(false);
-          return;
-        }
-
-        // 2) CREATE BOOKING
-        const bookingRef = await addDoc(collection(db, "bookings"), {
-          serviceId: service.id,
-          providerId: service.providerId,
-          customerId: user.uid,
-          businessName: service.businessName,
-          category: service.category,
-          description: service.description,
-          price: service.price ?? 0,
-          status: "pending",
-          scheduledDate: "",
-          scheduledTime: "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        // 3) CREATE CONVERSATION
-        const conversationRef = await addDoc(collection(db, "conversations"), {
-          bookingId: bookingRef.id,
-          serviceId: service.id,
-          providerId: service.providerId,
-          customerId: user.uid,
-          participants: [service.providerId, user.uid],
-          businessName: service.businessName,
-          lastMessage: `Hello! I want to inquire about ${service.businessName}.`,
-          lastMessageAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        });
-
-        // 4) CREATE FIRST MESSAGE
-        await addDoc(collection(db, "messages"), {
-          conversationId: conversationRef.id,
-          senderId: user.uid,
-          text: `Hello! I want to inquire about ${service.businessName}.`,
-          createdAt: serverTimestamp(),
-        });
-
-        // 5) OPTIONAL: NOTIFY PROVIDER
-        await addDoc(collection(db, "notifications"), {
-          userId: service.providerId,
-          title: "New Booking Request",
-          body: `${user.email || "A customer"} messaged about ${service.businessName}.`,
-          type: "new_booking",
-          bookingId: bookingRef.id,
-          conversationId: conversationRef.id,
-          isRead: false,
-          createdAt: serverTimestamp(),
-        });
-
-        // 6) GO TO CHAT IMMEDIATELY
         router.push({
           pathname: "/(app)/chat",
           params: {
-            conversationId: conversationRef.id,
-            bookingId: bookingRef.id,
+            conversationId: existingConversation.id,
+            bookingId: existingData.bookingId,
           },
         });
-      } catch (e) {
-        console.log("Message error", e);
-      } finally {
+
         setLoadingChat(false);
+        return;
       }
-    };
+
+      const bookingRef = await addDoc(collection(db, "bookings"), {
+        serviceId: service.id,
+        providerId: service.providerId,
+        customerId: user.uid,
+        businessName: service.businessName,
+        category: service.category,
+        description: service.description,
+        price: service.price ?? 0,
+        status: "pending",
+        scheduledDate: "",
+        scheduledTime: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      const conversationRef = await addDoc(collection(db, "conversations"), {
+        bookingId: bookingRef.id,
+        serviceId: service.id,
+        providerId: service.providerId,
+        customerId: user.uid,
+        participants: [service.providerId, user.uid],
+        businessName: service.businessName,
+        lastMessage: `Hello! I want to inquire about ${service.businessName}.`,
+        lastMessageAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      });
+
+      await addDoc(collection(db, "messages"), {
+        conversationId: conversationRef.id,
+        senderId: user.uid,
+        text: `Hello! I want to inquire about ${service.businessName}.`,
+        createdAt: serverTimestamp(),
+      });
+
+      await addDoc(collection(db, "notifications"), {
+        userId: service.providerId,
+        title: "New Booking Request",
+        body: `${user.email || "A customer"} messaged about ${service.businessName}.`,
+        type: "new_booking",
+        bookingId: bookingRef.id,
+        conversationId: conversationRef.id,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
+
+      router.push({
+        pathname: "/(app)/chat",
+        params: {
+          conversationId: conversationRef.id,
+          bookingId: bookingRef.id,
+        },
+      });
+    } catch (e) {
+      console.log("Message error", e);
+    } finally {
+      setLoadingChat(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-
-      {/* HEADER CARD (UNCHANGED) */}
       <Animated.View
         style={[
           styles.headerCard,
@@ -324,7 +372,6 @@ export default function Home() {
         </ImageBackground>
       </Animated.View>
 
-      {/* SCROLL AREA */}
       <Animated.ScrollView
         contentContainerStyle={{ padding: 20 }}
         showsVerticalScrollIndicator={false}
@@ -334,7 +381,6 @@ export default function Home() {
         )}
         scrollEventThrottle={16}
       >
-
         <Text
           style={{
             fontFamily: "Kyiv_700",
@@ -372,15 +418,31 @@ export default function Home() {
                 },
               ]}
             >
-              <Text
+              <View
                 style={{
-                  fontFamily: "Kyiv_700",
-                  fontSize: 22,
-                  color: theme.colors.primary,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                {item.businessName}
-              </Text>
+                <Text
+                  style={{
+                    fontFamily: "Kyiv_700",
+                    fontSize: 22,
+                    color: theme.colors.primary,
+                  }}
+                >
+                  {item.businessName}
+                </Text>
+
+                <Pressable onPress={() => toggleFavorite(item.id)}>
+                  <FontAwesome
+                    name={favorites.includes(item.id) ? "heart" : "heart-o"}
+                    size={20}
+                    color="#E53935"
+                  />
+                </Pressable>
+              </View>
 
               <Text
                 style={{
@@ -444,8 +506,6 @@ export default function Home() {
                 {item.startTime} - {item.endTime}
               </Text>
 
-              {/* MESSAGE BUTTON */}
-
               <Pressable
                 onPress={() => {
                   if (!loadingChat) handleMessage(item);
@@ -467,11 +527,9 @@ export default function Home() {
                   Message & Book
                 </Text>
               </Pressable>
-
             </View>
           ))
         )}
-
       </Animated.ScrollView>
     </View>
   );

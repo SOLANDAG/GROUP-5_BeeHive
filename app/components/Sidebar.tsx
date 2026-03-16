@@ -26,6 +26,7 @@ const SIDEBAR_WIDTH = width * 0.8;
 
 export default function Sidebar() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isProvider, setIsProvider] = useState(false);
   const { theme } = useTheme();
   const { isOpen, closeSidebar, openSidebar } = useSidebar();
   const { currentMode } = useRoleContext();
@@ -49,6 +50,9 @@ export default function Sidebar() {
 
         if (data.admin === true) {
           setIsAdmin(true);
+        }
+        if (data.providerStatus === "approved") {
+          setIsProvider(true);
         }
 
       } catch (error) {
@@ -192,7 +196,9 @@ export default function Sidebar() {
                     { color: theme.colors.text },
                   ]}
                 >
-                  {auth.currentUser?.displayName || "Guest"}
+                  {isAdmin
+                  ? "Admin"
+                  : auth.currentUser?.displayName || "Guest"}
                 </Text>
 
                 <Text
@@ -223,50 +229,65 @@ export default function Sidebar() {
               ]}
             />
 
-            {currentMode === "customer" && (
+            {isAdmin ? (
               <>
-                {renderItem("Favorites", "/(app)/favorites", "heart")}
                 {renderItem(
-                  "Payment Method",
-                  "/(app)/payment",
-                  "credit-card"
+                  "Dashboard",
+                  "/(app)/admin/dashboard",
+                  "chart-line"
                 )}
 
-                <View
-                  style={[
-                    styles.divider,
-                    { backgroundColor: theme.colors.border },
-                  ]}
-                />
-
-                {isAdmin && renderItem("Provider Applications", "/(app)/admin/applications", "clipboard-list")}
-
                 {renderItem(
-                  "Become a Provider",
-                  "/(app)/apply-provider",
-                  "briefcase"
+                  "Applications",
+                  "/(app)/admin/applications",
+                  "clipboard-list"
                 )}
               </>
-            )}
-
-            {currentMode === "provider" && (
+            ) : (
               <>
-                {renderItem("Ratings", "/(app)/ratings", "star")}
-                {renderItem(
-                  "My Services",
-                  "/(app)/my-services",
-                  "briefcase"
+                {currentMode === "customer" && (
+                  <>
+                  {!isProvider && (
+                    <>
+                      {renderItem("Favorites", "/(app)/favorites", "heart")}
+
+                      {renderItem(
+                        "Payment Method",
+                        "/(app)/payment",
+                        "credit-card"
+                      )}
+
+                      <View
+                        style={[
+                          styles.divider,
+                          { backgroundColor: theme.colors.border },
+                        ]}
+                      />
+                    </>
+                  )}
+
+                    {!isProvider && renderItem(
+                      "Become a Provider",
+                      "/(app)/apply-provider",
+                      "briefcase"
+                    )}
+
+                    {isProvider && renderItem(
+                      "Provider Status",
+                      "/(app)/provider-status",
+                      "briefcase"
+                    )}
+                  </>
                 )}
-                {renderItem(
-                  "Availability",
-                  "/(app)/availability",
-                  "calendar"
-                )}
-                {renderItem(
-                  "Earnings",
-                  "/(app)/earnings",
-                  "wallet"
-                )}
+
+              {isProvider && (
+                <>
+                  {renderItem("Ratings", "/(app)/ratings", "star")}
+                  {renderItem("My Services", "/(app)/my-services", "briefcase")}
+                  {renderItem("Availability", "/(app)/availability", "calendar")}
+                  {renderItem("Earnings", "/(app)/earnings", "wallet")}
+                </>
+              )}
               </>
             )}
 

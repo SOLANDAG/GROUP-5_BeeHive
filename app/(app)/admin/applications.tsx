@@ -142,6 +142,7 @@ export default function AdminApplications() {
       await updateDoc(doc(db, "users", app.userId), {
         "roles.provider": true,
         providerStatus: "approved",
+        currentMode: "provider"
       });
 
       await updateDoc(doc(db, "providerApplications", app.id), {
