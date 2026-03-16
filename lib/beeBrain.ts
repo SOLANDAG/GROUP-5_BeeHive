@@ -1,368 +1,253 @@
-import { askBee } from "@/lib/ai";
 import {
-  beeAddToSchedule,
+  BeeIntent,
+  BeeResponse,
+  BeeReplies,
   beeCancelBooking,
   beeCreateBooking,
   beeFindProviders,
+  beeGetLatestBooking,
   beeGetUpcomingBookings,
   beeRescheduleLatestBooking,
-  type BeeBooking,
-  type BeeService,
-} from "@/lib/bee";
+  extractProviderKeyword,
+  formatBookingSummary,
+  formatServiceList,
+  normalizeText,
+  parseScheduleFromText,
+} from "./bee";
 
-export type BeeMessage = {
-  role: "user" | "assistant";
-  text: string;
-};
-
-export type BeeIntent =
-  | "find_providers"
-  | "book_service"
-  | "view_schedule"
-  | "cancel_booking"
-  | "reschedule_booking"
-  | "general";
-
-export type BeeActionResult = {
-  reply: string;
-  intent: BeeIntent;
-  providers?: BeeService[];
-  bookings?: BeeBooking[];
-};
-
-function normalize(text: string) {
-  return text.trim().toLowerCase();
-}
-
-function includesAny(text: string, words: string[]) {
-  return words.some((word) => text.includes(word));
-}
-
-function detectIntent(input: string): BeeIntent {
-  const text = normalize(input);
+function detectIntent(text: string): BeeIntent {
+  const msg = normalizeText(text);
 
   if (
-    includesAny(text, [
-      "find provider",
-      "find providers",
-      "provider",
-      "providers",
-      "service",
-      "services",
-      "available provider",
-      "available providers",
-    ])
-  ) {
-    return "find_providers";
-  }
-
-  if (
-    includesAny(text, [
-      "book",
-      "booking",
-      "schedule me",
-      "make appointment",
-      "create booking",
-      "appoint",
-    ])
-  ) {
-    return "book_service";
-  }
-
-  if (
-    includesAny(text, [
-      "my schedule",
-      "view schedule",
-      "show schedule",
-      "upcoming",
-      "appointments",
-      "calendar",
-    ])
+    msg.includes("schedule") ||
+    msg.includes("calendar") ||
+    msg.includes("my bookings") ||
+    msg.includes("show bookings") ||
+    msg.includes("show my schedule")
   ) {
     return "view_schedule";
   }
 
   if (
-    includesAny(text, [
-      "cancel booking",
-      "cancel appointment",
-      "cancel my booking",
-      "cancel my appointment",
-    ])
+    msg.includes("cancel") &&
+    msg.includes("booking")
   ) {
     return "cancel_booking";
   }
 
   if (
-    includesAny(text, [
-      "reschedule",
-      "move my booking",
-      "change my booking",
-      "change schedule",
-    ])
+    msg.includes("cancel my latest") ||
+    msg.includes("cancel latest booking")
+  ) {
+    return "cancel_booking";
+  }
+
+  if (
+    msg.includes("reschedule") ||
+    msg.includes("change booking") ||
+    msg.includes("move my booking")
   ) {
     return "reschedule_booking";
   }
 
-  return "general";
-}
-
-function extractServiceKeyword(input: string) {
-  const text = normalize(input);
-
-  const fillers = [
-    "find",
-    "provider",
-    "providers",
-    "service",
-    "services",
-    "book",
-    "booking",
-    "appointment",
-    "schedule",
-    "for",
-    "me",
-    "a",
-    "an",
-    "the",
-    "please",
-  ];
-
-  const cleaned = text
-    .replace(/[.,!?]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word && !fillers.includes(word))
-    .join(" ")
-    .trim();
-
-  return cleaned;
-}
-
-function extractDate(input: string) {
-  const text = normalize(input);
-
-  if (text.includes("today")) {
-    const today = new Date();
-    return today.toISOString().slice(0, 10);
+  if (
+    msg.includes("book") ||
+    msg.includes("appointment") ||
+    msg.includes("make booking")
+  ) {
+    return "book_appointment";
   }
 
-  if (text.includes("tomorrow")) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().slice(0, 10);
+  if (
+    msg.includes("provider") ||
+    msg.includes("providers") ||
+    msg.includes("service") ||
+    msg.includes("services")
+  ) {
+    return "find_providers";
   }
 
-  const isoMatch = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (isoMatch) {
-    return isoMatch[1];
+  if (
+    msg.includes("help") ||
+    msg.includes("what can you do") ||
+    msg.includes("what do you do")
+  ) {
+    return "help";
   }
 
-  return "";
+  return "unknown";
 }
 
-function extractTime(input: string) {
-  const text = input.trim();
+async function handleViewSchedule(): Promise<BeeResponse> {
+  const bookings = await beeGetUpcomingBookings();
 
-  const exactTime = text.match(
-    /\b(1[0-2]|0?[1-9]):([0-5][0-9])\s?(AM|PM|am|pm)\b/
-  );
-  if (exactTime) {
-    return `${exactTime[1]}:${exactTime[2]} ${exactTime[3].toUpperCase()}`;
-  }
-
-  const hourOnly = text.match(/\b(1[0-2]|0?[1-9])\s?(AM|PM|am|pm)\b/);
-  if (hourOnly) {
-    return `${hourOnly[1]}:00 ${hourOnly[2].toUpperCase()}`;
-  }
-
-  if (normalize(input).includes("morning")) return "9:00 AM";
-  if (normalize(input).includes("afternoon")) return "2:00 PM";
-  if (normalize(input).includes("evening")) return "6:00 PM";
-
-  return "";
-}
-
-function formatProviders(providers: BeeService[]) {
-  return providers
-    .slice(0, 5)
-    .map((provider, index) => {
-      const name = provider.businessName || "Unnamed Provider";
-      const category = provider.category ? ` — ${provider.category}` : "";
-      return `${index + 1}. ${name}${category}`;
-    })
-    .join("\n");
-}
-
-function formatBookings(bookings: BeeBooking[]) {
-  return bookings
-    .slice(0, 5)
-    .map((booking, index) => {
-      const name = booking.businessName || "Appointment";
-      const date = booking.scheduledDate || "No date yet";
-      const time = booking.scheduledTime || "No time yet";
-      const status = booking.status || "pending";
-      return `${index + 1}. ${name} • ${date} • ${time} • ${status}`;
-    })
-    .join("\n");
-}
-
-export async function executeBeeCommand(input: string): Promise<BeeActionResult> {
-  const intent = detectIntent(input);
-
-  if (intent === "find_providers") {
-    const keyword = extractServiceKeyword(input);
-    const providers = await beeFindProviders(keyword);
-
-    if (!providers.length) {
-      return {
-        intent,
-        providers: [],
-        reply:
-          keyword
-            ? `I couldn't find providers matching "${keyword}" right now. Try another keyword or tap Book Appointment to continue.`
-            : "I couldn't find any active providers right now.",
-      };
-    }
-
+  if (!bookings.length) {
     return {
-      intent,
-      providers,
-      reply: `Here are the available providers I found:\n\n${formatProviders(
-        providers
-      )}`,
+      intent: "view_schedule",
+      reply: "You do not have any bookings yet. I will still open your schedule so you can check your calendar.",
     };
   }
 
-  if (intent === "book_service") {
-    const keyword = extractServiceKeyword(input);
-    const date = extractDate(input);
-    const time = extractTime(input);
+  const upcoming = bookings
+    .filter((booking) => booking.status !== "cancelled")
+    .slice(0, 3);
 
-    if (!keyword) {
-      return {
-        intent,
-        reply:
-          "I can book that for you. Please tell me the service you want, like cleaning, makeup, tutoring, or repair.",
-      };
-    }
-
-    const providers = await beeFindProviders(keyword);
-
-    if (!providers.length) {
-      return {
-        intent,
-        providers: [],
-        reply: `I couldn't find a provider for "${keyword}" right now.`,
-      };
-    }
-
-    if (!date || !time) {
-      return {
-        intent,
-        providers,
-        reply:
-          `I found provider options for "${keyword}".\n\n${formatProviders(
-            providers
-          )}\n\nTo complete the booking, send a date and time like:\nBook ${keyword} tomorrow 3 PM`,
-      };
-    }
-
-    const chosen = providers[0];
-    const bookingId = await beeCreateBooking(chosen);
-
-    if (!bookingId) {
-      return {
-        intent,
-        providers,
-        reply:
-          "I couldn't create the booking right now. Please make sure you're logged in and try again.",
-      };
-    }
-
-    await beeAddToSchedule(bookingId, date, time);
-
+  if (!upcoming.length) {
     return {
-      intent,
-      providers,
-      reply: `You're booked with ${
-        chosen.businessName || "the provider"
-      } on ${date} at ${time}. I also added it to your schedule.`,
+      intent: "view_schedule",
+      reply: "Your recent bookings are currently cancelled or completed. I will open your schedule so you can review them.",
     };
   }
 
-  if (intent === "view_schedule") {
-    const bookings = await beeGetUpcomingBookings();
-
-    if (!bookings.length) {
-      return {
-        intent,
-        bookings: [],
-        reply: "You don't have any bookings yet.",
-      };
-    }
-
-    return {
-      intent,
-      bookings,
-      reply: `Here are your bookings:\n\n${formatBookings(bookings)}`,
-    };
-  }
-
-  if (intent === "cancel_booking") {
-    const bookings = await beeGetUpcomingBookings();
-
-    if (!bookings.length) {
-      return {
-        intent,
-        bookings: [],
-        reply: "You don't have any bookings to cancel.",
-      };
-    }
-
-    const latest = bookings[0];
-
-    await beeCancelBooking(latest.id);
-
-    return {
-      intent,
-      bookings,
-      reply: `Your latest booking with ${
-        latest.businessName || "the provider"
-      } has been cancelled.`,
-    };
-  }
-
-  if (intent === "reschedule_booking") {
-    const date = extractDate(input);
-    const time = extractTime(input);
-
-    if (!date || !time) {
-      return {
-        intent,
-        reply:
-          "Please tell me the new date and time, like: reschedule my booking to tomorrow 4 PM",
-      };
-    }
-
-    const result = await beeRescheduleLatestBooking(date, time);
-
-    if (!result) {
-      return {
-        intent,
-        reply: "I couldn't find a booking to reschedule.",
-      };
-    }
-
-    return {
-      intent,
-      reply: `Your latest booking has been moved to ${date} at ${time}.`,
-    };
-  }
-
-  const aiReply = await askBee(input);
+  const summary = upcoming.map(formatBookingSummary).join("\n");
 
   return {
-    intent: "general",
-    reply: aiReply,
+    intent: "view_schedule",
+    reply: `Here is your schedule summary:\n${summary}\n\nI will open your calendar for you.`,
   };
+}
+
+async function handleFindProviders(message: string): Promise<BeeResponse> {
+  const keyword = extractProviderKeyword(message);
+  const providers = await beeFindProviders(keyword);
+
+  if (!providers.length) {
+    if (keyword) {
+      return {
+        intent: "find_providers",
+        reply: `I could not find providers for "${keyword}" right now. Try a broader keyword like cleaning, repair, salon, tutor, or photographer.`,
+      };
+    }
+
+    return {
+      intent: "find_providers",
+      reply: "I could not find providers right now. Please make sure providers have been approved and saved in the services collection.",
+    };
+  }
+
+  const label = keyword ? ` for "${keyword}"` : "";
+  const summary = formatServiceList(providers);
+
+  return {
+    intent: "find_providers",
+    reply: `I found these providers${label}:\n${summary}\n\nYou can open a provider chat and send a booking request.`,
+  };
+}
+
+async function handleBookAppointment(message: string): Promise<BeeResponse> {
+  const keyword = extractProviderKeyword(message);
+  const { date, time } = parseScheduleFromText(message);
+
+  const providers = await beeFindProviders(keyword);
+
+  if (!providers.length) {
+    return {
+      intent: "book_appointment",
+      reply: "I could not find a matching provider for that booking request. Try something like: book cleaning tomorrow 3 PM.",
+    };
+  }
+
+  const selectedProvider = providers[0];
+  const bookingId = await beeCreateBooking(selectedProvider);
+
+  if (!bookingId) {
+    return {
+      intent: "book_appointment",
+      reply: "You need to be logged in before I can create a booking.",
+    };
+  }
+
+  if (date && time) {
+    await import("./bee").then(async ({ beeAddToSchedule }) => {
+      await beeAddToSchedule(bookingId, date, time);
+    });
+
+    return {
+      intent: "book_appointment",
+      reply: `Your booking request for ${selectedProvider.businessName || "the provider"} has been created and added to your schedule on ${date} at ${time}.`,
+    };
+  }
+
+  return {
+    intent: "book_appointment",
+    reply: `I created a booking request for ${selectedProvider.businessName || "the provider"}, but I still need a clear date and time. Try: reschedule my latest booking to 2026-03-20 4 PM.`,
+  };
+}
+
+async function handleCancelBooking(): Promise<BeeResponse> {
+  const latest = await beeGetLatestBooking();
+
+  if (!latest) {
+    return {
+      intent: "cancel_booking",
+      reply: "You do not have any booking to cancel yet.",
+    };
+  }
+
+  await beeCancelBooking(latest.id);
+
+  return {
+    intent: "cancel_booking",
+    reply: `Your latest booking has been cancelled.\n${formatBookingSummary(latest)}`,
+  };
+}
+
+async function handleRescheduleBooking(message: string): Promise<BeeResponse> {
+  const { date, time } = parseScheduleFromText(message);
+
+  if (!date || !time) {
+    return {
+      intent: "reschedule_booking",
+      reply: "Please include both a date and time. Example: reschedule my latest booking to 2026-03-20 4 PM.",
+    };
+  }
+
+  const updatedId = await beeRescheduleLatestBooking(date, time);
+
+  if (!updatedId) {
+    return {
+      intent: "reschedule_booking",
+      reply: "I could not find any booking to reschedule.",
+    };
+  }
+
+  return {
+    intent: "reschedule_booking",
+    reply: `Your latest booking has been rescheduled to ${date} at ${time}.`,
+  };
+}
+
+export async function executeBeeCommand(
+  message: string
+): Promise<BeeResponse> {
+  const intent = detectIntent(message);
+
+  switch (intent) {
+    case "view_schedule":
+      return handleViewSchedule();
+
+    case "find_providers":
+      return handleFindProviders(message);
+
+    case "book_appointment":
+      return handleBookAppointment(message);
+
+    case "cancel_booking":
+      return handleCancelBooking();
+
+    case "reschedule_booking":
+      return handleRescheduleBooking(message);
+
+    case "help":
+      return {
+        intent: "help",
+        reply: BeeReplies.help,
+      };
+
+    default:
+      return {
+        intent: "unknown",
+        reply: BeeReplies.unknown,
+      };
+  }
 }
