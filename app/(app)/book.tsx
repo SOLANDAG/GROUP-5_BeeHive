@@ -15,7 +15,7 @@ import {
   collection,
   query,
   where,
-  getDocs,
+  onSnapshot,
   doc,
   updateDoc,
 } from "firebase/firestore";
@@ -27,44 +27,45 @@ export default function Book() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchBookings = async () => {
+  useEffect(() => {
     if (!user) return;
 
-    try {
-      const q = query(
-        collection(db, "bookings"),
-        where("customerId", "==", user.uid),
-        where("status", "==", "accepted")
-      );
+    const q = query(
+      collection(db, "bookings"),
+      where("customerId", "==", user.uid)
+    );
 
-      const snap = await getDocs(q);
-
-      const list = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const list = snap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        // remove cancelled/completed bookings
+        .filter(
+          (b: any) =>
+            b.status !== "cancelled" &&
+            b.status !== "completed"
+        )
+        // newest first
+        .sort((a: any, b: any) => {
+          const ta = a.createdAt?.seconds || 0;
+          const tb = b.createdAt?.seconds || 0;
+          return tb - ta;
+        });
 
       setBookings(list);
-    } catch (e) {
-      console.log(e);
-    }
+      setLoading(false);
+    });
 
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchBookings();
+    return () => unsubscribe();
   }, []);
 
   const cancelBooking = async (bookingId: string) => {
     try {
-      const bookingRef = doc(db, "bookings", bookingId);
-
-      await updateDoc(bookingRef, {
+      await updateDoc(doc(db, "bookings", bookingId), {
         status: "cancelled",
       });
-
-      fetchBookings();
     } catch (e) {
       console.log(e);
     }
@@ -72,13 +73,9 @@ export default function Book() {
 
   const markDone = async (bookingId: string) => {
     try {
-      const bookingRef = doc(db, "bookings", bookingId);
-
-      await updateDoc(bookingRef, {
+      await updateDoc(doc(db, "bookings", bookingId), {
         status: "completed",
       });
-
-      fetchBookings();
     } catch (e) {
       console.log(e);
     }
@@ -113,103 +110,112 @@ export default function Book() {
             opacity: 0.7,
           }}
         >
-          No accepted bookings yet.
+          No active bookings yet.
         </Text>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
-          {bookings.map((item) => (
-            <View
-              key={item.id}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text style={styles.date}>
-                {item.scheduledDate || "Date not set"}
-              </Text>
+          {bookings.map((item) => {
+            const date =
+              item.date || item.bookingDate || "Date not set";
 
-              <Text
+            const time =
+              item.time || item.bookingTime || "Time not set";
+
+            return (
+              <View
+                key={item.id}
                 style={[
-                  styles.title,
-                  { color: theme.colors.primary },
+                  styles.card,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                  },
                 ]}
               >
-                {item.businessName}
-              </Text>
-
-              <Text
-                style={[
-                  styles.subtitle,
-                  { color: theme.colors.text },
-                ]}
-              >
-                Appointment
-              </Text>
-
-              <Text
-                style={[
-                  styles.time,
-                  { color: theme.colors.text },
-                ]}
-              >
-                {item.scheduledTime || "Time not set"}
-              </Text>
-
-              {/* PRICE */}
-
-              <Text
-                style={{
-                  fontFamily: "Kyiv_700",
-                  color: theme.colors.text,
-                  marginTop: 8,
-                }}
-              >
-                Price: ₱{item.price ?? 0}
-              </Text>
-
-              {/* ACTION BUTTONS */}
-
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => cancelBooking(item.id)}
+                <Text
                   style={[
-                    styles.cancelBtn,
-                    { borderColor: theme.colors.border },
+                    styles.date,
+                    { color: theme.colors.text },
                   ]}
                 >
-                  <Text
-                    style={{
-                      color: theme.colors.text,
-                      fontFamily: "Kyiv_600",
-                    }}
-                  >
-                    Cancel
-                  </Text>
-                </Pressable>
+                  {date}
+                </Text>
 
-                <Pressable
-                  onPress={() => markDone(item.id)}
+                <Text
                   style={[
-                    styles.doneBtn,
-                    { backgroundColor: theme.colors.primary },
+                    styles.title,
+                    { color: theme.colors.primary },
                   ]}
                 >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontFamily: "Kyiv_700",
-                    }}
+                  {item.businessName || "Service"}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.subtitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Appointment
+                </Text>
+
+                <Text
+                  style={[
+                    styles.time,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {time}
+                </Text>
+
+                <Text
+                  style={{
+                    fontFamily: "Kyiv_700",
+                    color: theme.colors.text,
+                    marginTop: 8,
+                  }}
+                >
+                  Price: ₱{item.price ?? 0}
+                </Text>
+
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={() => cancelBooking(item.id)}
+                    style={[
+                      styles.cancelBtn,
+                      { backgroundColor: "#C62828" },
+                    ]}
                   >
-                    Done
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontFamily: "Kyiv_700",
+                      }}
+                    >
+                      Cancel
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => markDone(item.id)}
+                    style={[
+                      styles.doneBtn,
+                      { backgroundColor: "#2E7D32" },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontFamily: "Kyiv_700",
+                      }}
+                    >
+                      Done
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </View>
@@ -252,15 +258,14 @@ const styles = StyleSheet.create({
   },
 
   cancelBtn: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
   },
 
   doneBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
   },
 });

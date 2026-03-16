@@ -3,6 +3,10 @@ import { useRouter, usePathname } from "expo-router";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { FontAwesome5 } from "@expo/vector-icons";
 
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
+
 type FooterItem = {
   label: string;
   route: string;
@@ -13,16 +17,44 @@ export default function AppFooter() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme } = useTheme();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+
+    const checkAdmin = async () => {
+
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const snap = await getDoc(doc(db, "users", user.uid));
+
+      if (snap.exists()) {
+        setIsAdmin(snap.data().admin === true);
+      }
+
+    };
+
+    checkAdmin();
+
+  }, []);
 
   // Customer + Worker footer order (per your blueprint):
   // Home, Book, Bee, Message, Schedule :contentReference[oaicite:3]{index=3}
-  const items: FooterItem[] = [
-    { label: "Home", route: "/(app)/home", icon: "home" },
-    { label: "Book", route: "/(app)/book", icon: "book-open" },
-    { label: "Bee", route: "/(app)/assistant", icon: "robot" },
-    { label: "Message", route: "/(app)/messages", icon: "comments" },
-    { label: "Schedule", route: "/(app)/schedule", icon: "calendar-alt" },
-  ];
+  const items: FooterItem[] = isAdmin
+    ? [
+        { label: "Home", route: "/(app)/home", icon: "home" },
+        { label: "Requests", route: "/(app)/admin/applications", icon: "clipboard-list" },
+        { label: "Bee", route: "/(app)/assistant", icon: "robot" },
+        { label: "Dashboard", route: "/(app)/admin/dashboard", icon: "chart-line" },
+        { label: "Reports", route: "/(app)/reports", icon: "file-alt" },
+      ]
+    : [
+        { label: "Home", route: "/(app)/home", icon: "home" },
+        { label: "Book", route: "/(app)/book", icon: "book-open" },
+        { label: "Bee", route: "/(app)/assistant", icon: "robot" },
+        { label: "Message", route: "/(app)/messages", icon: "comments" },
+        { label: "Schedule", route: "/(app)/schedule", icon: "calendar-alt" },
+      ];
 
   return (
     <View

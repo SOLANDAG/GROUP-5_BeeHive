@@ -25,49 +25,67 @@ const { width } = Dimensions.get("window");
 const SIDEBAR_WIDTH = width * 0.8;
 
 export default function Sidebar() {
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isProvider, setIsProvider] = useState(false);
+
   const { theme } = useTheme();
   const { isOpen, closeSidebar, openSidebar } = useSidebar();
   const { currentMode } = useRoleContext();
+
   const router = useRouter();
   const pathname = usePathname();
 
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
+  /* ================= USER ROLE LISTENER ================= */
+
   useEffect(() => {
+
     const user = auth.currentUser;
     if (!user) return;
 
     const unsubscribe = onSnapshot(doc(db, "users", user.uid), (snap) => {
+
       if (!snap.exists()) return;
 
       const data = snap.data();
 
       setIsAdmin(data.admin === true);
       setIsProvider(data.providerStatus === "approved");
+
     });
 
     return unsubscribe;
+
   }, []);
 
+  /* ================= SIDEBAR ANIMATION ================= */
+
   useEffect(() => {
+
     Animated.timing(translateX, {
       toValue: isOpen ? 0 : -SIDEBAR_WIDTH,
       duration: 280,
       useNativeDriver: true,
     }).start();
+
   }, [isOpen]);
 
+  /* ================= SWIPE HANDLING ================= */
+
   const handleGesture = (event: any) => {
+
     let drag = event.nativeEvent.translationX;
 
     if (drag > 0) {
       translateX.setValue(Math.min(drag - SIDEBAR_WIDTH, 0));
     }
+
   };
 
   const handleGestureEnd = (event: any) => {
+
     const drag = event.nativeEvent.translationX;
 
     if (drag > SIDEBAR_WIDTH / 3) {
@@ -75,19 +93,29 @@ export default function Sidebar() {
     } else {
       closeSidebar();
     }
+
   };
+
+  /* ================= NAVIGATION ================= */
 
   const navigate = (route: string) => {
+
     router.push(route as any);
     closeSidebar();
+
   };
 
+  /* ================= SIDEBAR ITEM ================= */
+
   const renderItem = (label: string, route: string, icon: string) => {
+
     const currentScreen = pathname.split("/").pop();
     const targetScreen = route.split("/").pop();
+
     const active = currentScreen === targetScreen;
 
     return (
+
       <Pressable
         onPress={() => navigate(route)}
         style={[
@@ -109,6 +137,7 @@ export default function Sidebar() {
           }
           style={{ marginRight: 14 }}
         />
+
         <Text
           style={[
             styles.itemText,
@@ -121,8 +150,11 @@ export default function Sidebar() {
         >
           {label}
         </Text>
+
       </Pressable>
+
     );
+
   };
 
   return (
@@ -154,6 +186,8 @@ export default function Sidebar() {
               paddingTop: 60,
             }}
           >
+            {/* CLOSE BUTTON */}
+
             <Pressable onPress={closeSidebar}>
               <Ionicons
                 name="chevron-back"
@@ -163,6 +197,8 @@ export default function Sidebar() {
             </Pressable>
 
             <View style={{ height: 20 }} />
+
+            {/* PROFILE */}
 
             <Pressable
               onPress={() => navigate("/(app)/profile")}
@@ -185,8 +221,8 @@ export default function Sidebar() {
                   ]}
                 >
                   {isAdmin
-                  ? "Admin"
-                  : auth.currentUser?.displayName || "Guest"}
+                    ? "Admin"
+                    : auth.currentUser?.displayName || "Guest"}
                 </Text>
 
                 <Text
@@ -207,75 +243,65 @@ export default function Sidebar() {
               ]}
             />
 
+            {/* BASIC */}
+
             {renderItem("Profile", "/(app)/profile", "user")}
             {renderItem("Settings", "/(app)/settings", "cog")}
 
-            <View
-              style={[
-                styles.divider,
-                { backgroundColor: theme.colors.border },
-              ]}
-            />
-
             {isAdmin ? (
               <>
-                {renderItem(
-                  "Dashboard",
-                  "/(app)/admin/dashboard",
-                  "chart-line"
-                )}
-
-                {renderItem(
-                  "Applications",
-                  "/(app)/admin/applications",
-                  "clipboard-list"
-                )}
               </>
             ) : (
               <>
+                {/* CUSTOMER MODE */}
+
                 {currentMode === "customer" && (
                   <>
-                  {!isProvider && (
-                    <>
-                      {renderItem("Favorites", "/(app)/favorites", "heart")}
+                    {!isProvider && (
+                      <>
+                        {renderItem("Favorites", "/(app)/favorites", "heart")}
 
-                      {renderItem(
-                        "Payment Method",
-                        "/(app)/payment",
-                        "credit-card"
+                        {renderItem(
+                          "Payment Method",
+                          "/(app)/payment",
+                          "credit-card"
+                        )}
+
+                        <View
+                          style={[
+                            styles.divider,
+                            { backgroundColor: theme.colors.border },
+                          ]}
+                        />
+                      </>
+                    )}
+
+                    {!isProvider &&
+                      renderItem(
+                        "Become a Provider",
+                        "/(app)/apply-provider",
+                        "briefcase"
                       )}
 
-                      <View
-                        style={[
-                          styles.divider,
-                          { backgroundColor: theme.colors.border },
-                        ]}
-                      />
-                    </>
-                  )}
-
-                    {!isProvider && renderItem(
-                      "Become a Provider",
-                      "/(app)/apply-provider",
-                      "briefcase"
-                    )}
-
-                    {isProvider && renderItem(
-                      "Provider Status",
-                      "/(app)/provider-status",
-                      "briefcase"
-                    )}
+                    {isProvider &&
+                      renderItem(
+                        "Provider Status",
+                        "/(app)/provider-status",
+                        "briefcase"
+                      )}
                   </>
                 )}
 
-              {isProvider && (
-                <>
-                  {renderItem("Ratings", "/(app)/ratings", "star")}
-                  {renderItem("My Services", "/(app)/my-services", "briefcase")}
-                  {renderItem("Availability", "/(app)/availability", "calendar")}
-                  {renderItem("Earnings", "/(app)/earnings", "wallet")}
-                </>
-              )}
+                {/* PROVIDER PANEL */}
+
+                {isProvider && (
+                  <>
+                    {renderItem("Ratings", "/(app)/ratings", "star")}
+                    {renderItem("My Services", "/(app)/my-services", "briefcase")}
+                    {renderItem("Availability", "/(app)/availability", "calendar")}
+                    {renderItem("Earnings", "/(app)/earnings", "wallet")}
+                  </>
+                )}
               </>
             )}
 
@@ -285,6 +311,8 @@ export default function Sidebar() {
                 { backgroundColor: theme.colors.border },
               ]}
             />
+
+            {/* INFORMATION */}
 
             {renderItem("About BeeHive", "/(app)/about", "info-circle")}
             {renderItem("Help & Support", "/(app)/help", "question-circle")}
@@ -297,6 +325,8 @@ export default function Sidebar() {
                 { backgroundColor: theme.colors.border },
               ]}
             />
+
+            {/* LOGOUT */}
 
             <Pressable
               onPress={async () => {
@@ -311,6 +341,7 @@ export default function Sidebar() {
                 color="#E53935"
                 style={{ marginRight: 14 }}
               />
+
               <Text
                 style={[
                   styles.itemText,

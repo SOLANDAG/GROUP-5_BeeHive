@@ -24,18 +24,23 @@ import {
   doc,
   updateDoc,
   getDoc,
-  setDoc,
 } from "firebase/firestore";
 
 type ChatMessage = {
   id: string;
   senderId: string;
-  text: string;
+  type: "text" | "booking";
+  text?: string;
+
+  bookingDate?: string;
+  bookingTime?: string;
+  bookingStatus?: "pending" | "accepted" | "declined";
 };
 
 export default function ChatScreen() {
+
   const { theme } = useTheme();
-  const { conversationId, bookingId } = useLocalSearchParams();
+  const { conversationId } = useLocalSearchParams();
 
   const user = auth.currentUser;
 
@@ -49,14 +54,13 @@ export default function ChatScreen() {
     [conversationId]
   );
 
-  const safeBookingId = useMemo(
-    () => String(bookingId || ""),
-    [bookingId]
-  );
+  const isCustomer = user?.uid === conversation?.customerId;
+  const isProvider = user?.uid === conversation?.providerId;
 
-  /* ================= LOAD CONVERSATION + MESSAGES ================= */
+  /* ================= LOAD CHAT ================= */
 
   useEffect(() => {
+
     if (!safeConversationId) {
       setLoading(false);
       return;
@@ -65,55 +69,42 @@ export default function ChatScreen() {
     let unsubscribe: any;
 
     const initChat = async () => {
-      try {
-        const convRef = doc(db, "conversations", safeConversationId);
-        const snap = await getDoc(convRef);
 
-        if (snap.exists()) {
-          const data = snap.data();
-          setConversation({ id: snap.id, ...data });
+      const convRef = doc(db, "conversations", safeConversationId);
+      const snap = await getDoc(convRef);
 
-          // security: ensure current user is a participant
-          if (
-            !data.participants ||
-            !data.participants.includes(user?.uid)
-          ) {
-            console.log("User is not participant");
-            setLoading(false);
-            return;
-          }
-        } else {
-          console.log("Conversation not found");
-          setLoading(false);
-          return;
-        }
-
-        const q = query(
-          collection(db, "messages"),
-          where("conversationId", "==", safeConversationId),
-          orderBy("createdAt", "asc")
-        );
-
-        unsubscribe = onSnapshot(
-          q,
-          (snap) => {
-            const list = snap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              ...(docSnap.data() as any),
-            }));
-
-            setMessages(list);
-            setLoading(false);
-          },
-          (error) => {
-            console.log("Messages snapshot error:", error);
-            setLoading(false);
-          }
-        );
-      } catch (error) {
-        console.log("Chat init error:", error);
+      if (!snap.exists()) {
         setLoading(false);
+        return;
       }
+
+      const data = snap.data();
+
+      setConversation({ id: snap.id, ...data });
+
+      if (!data.participants.includes(user?.uid)) {
+        setLoading(false);
+        return;
+      }
+
+      const q = query(
+        collection(db, "messages"),
+        where("conversationId", "==", safeConversationId),
+        orderBy("createdAt", "asc")
+      );
+
+      unsubscribe = onSnapshot(q, (snap) => {
+
+        const list = snap.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...(docSnap.data() as any),
+        }));
+
+        setMessages(list);
+        setLoading(false);
+
+      });
+
     };
 
     initChat();
@@ -121,72 +112,113 @@ export default function ChatScreen() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
+
   }, [safeConversationId]);
 
-  /* ================= SEND MESSAGE ================= */
+  /* ================= SEND TEXT MESSAGE ================= */
 
   const sendMessage = async () => {
+
     if (!user) return;
     if (!safeConversationId) return;
     if (!input.trim()) return;
 
     const cleanText = input.trim();
 
+    await addDoc(collection(db, "messages"), {
+      conversationId: safeConversationId,
+      senderId: user.uid,
+      type: "text",
+      text: cleanText,
+      createdAt: serverTimestamp(),
+    });
+
+    await updateDoc(doc(db, "conversations", safeConversationId), {
+      lastMessage: cleanText,
+      lastMessageAt: serverTimestamp(),
+    });
+
+    setInput("");
+
+  };
+
+  /* ================= SEND BOOKING REQUEST ================= */
+
+  const sendBooking = async () => {
+
+    if (!isCustomer) return;
+
+    await addDoc(collection(db, "messages"), {
+      conversationId: safeConversationId,
+      senderId: user?.uid,
+      type: "booking",
+      bookingDate: "2026-03-20",
+      bookingTime: "14:00",
+      bookingStatus: "pending",
+      createdAt: serverTimestamp(),
+    });
+
+  };
+
+  /* ================= ACCEPT BOOKING ================= */
+
+  const acceptBooking = async (message: ChatMessage) => {
+
     try {
 
-      /* ---------- ADD MESSAGE ---------- */
+      await updateDoc(doc(db, "messages", message.id), {
+        bookingStatus: "accepted",
+      });
 
-      await addDoc(collection(db, "messages"), {
+      await addDoc(collection(db, "bookings"), {
         conversationId: safeConversationId,
-        senderId: user.uid,
-        text: cleanText,
+        providerId: conversation.providerId,
+        customerId: conversation.customerId,
+        serviceId: conversation.serviceId,
+        businessName: conversation.businessName,
+        price: conversation.price,
+        date: message.bookingDate,
+        time: message.bookingTime,
+        status: "confirmed",
         createdAt: serverTimestamp(),
       });
 
-      /* ---------- UPDATE CONVERSATION ---------- */
-
       await updateDoc(doc(db, "conversations", safeConversationId), {
-        lastMessage: cleanText,
+        lastMessage: "Booking accepted",
         lastMessageAt: serverTimestamp(),
       });
 
-      /* ---------- CREATE NOTIFICATION ---------- */
-
-      if (conversation?.providerId && conversation?.customerId) {
-
-        const notifyUserId =
-          user.uid === conversation.customerId
-            ? conversation.providerId
-            : conversation.customerId;
-
-        const notificationId =
-          `${safeConversationId}_${Date.now()}`;
-
-        await setDoc(
-          doc(db, "notifications", notificationId),
-          {
-            userId: notifyUserId,
-            title: "New Message",
-            body: cleanText,
-            type: "chat_message",
-            bookingId: safeBookingId,
-            conversationId: safeConversationId,
-            isRead: false,
-            createdAt: serverTimestamp(),
-          }
-        );
-      }
-
-      setInput("");
-
-    } catch (error) {
-      console.log("Send message error:", error);
+    } catch (err) {
+      console.log("Accept booking error:", err);
     }
+
+  };
+
+  /* ================= DECLINE BOOKING ================= */
+
+  const declineBooking = async (message: ChatMessage) => {
+
+    try {
+
+      await updateDoc(doc(db, "messages", message.id), {
+        bookingStatus: "declined",
+      });
+
+      await updateDoc(doc(db, "conversations", safeConversationId), {
+        lastMessage: "Booking declined",
+        lastMessageAt: serverTimestamp(),
+      });
+
+    } catch (err) {
+      console.log("Decline booking error:", err);
+    }
+
   };
 
   /* ================= UI ================= */
 
   return (
+
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.colors.bg }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -195,122 +227,194 @@ export default function ChatScreen() {
 
       {/* HEADER */}
 
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 20,
-          paddingBottom: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
-          backgroundColor: theme.colors.bg,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Kyiv_700",
-            fontSize: 22,
-            color: theme.colors.text,
-          }}
-        >
+      <View style={{
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border
+      }}>
+
+        <Text style={{
+          fontFamily: "Kyiv_700",
+          fontSize: 22,
+          color: theme.colors.text
+        }}>
           {conversation?.businessName || "Chat"}
         </Text>
 
-        {!!safeBookingId && (
-          <Text
-            style={{
-              marginTop: 4,
-              fontFamily: "Kyiv_400",
-              color: theme.colors.text,
-              opacity: 0.7,
-            }}
-          >
-            Booking ID: {safeBookingId}
-          </Text>
-        )}
       </View>
 
-      {/* LOADING */}
-
       {loading ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+
       ) : (
+
         <>
+          {/* BOOKING BUTTON */}
+
+          {isCustomer && (
+
+            <Pressable
+              onPress={sendBooking}
+              style={{
+                margin: 16,
+                backgroundColor: theme.colors.primary,
+                padding: 14,
+                borderRadius: 14,
+                alignItems: "center"
+              }}
+            >
+              <Text style={{ color: "#fff", fontFamily: "Kyiv_700" }}>
+                Request Booking
+              </Text>
+            </Pressable>
+
+          )}
+
           {/* MESSAGES */}
 
-          <ScrollView
-            style={{ flex: 1, padding: 20 }}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.length === 0 ? (
-              <Text
-                style={{
-                  fontFamily: "Kyiv_400",
-                  color: theme.colors.text,
-                  opacity: 0.7,
-                }}
-              >
-                No messages yet.
-              </Text>
-            ) : (
-              messages.map((item) => {
+          <ScrollView style={{ flex: 1, padding: 20 }}>
 
-                const isMine = item.senderId === user?.uid;
+            {messages.map((item) => {
 
-                return (
-                  <View
-                    key={item.id}
-                    style={{
-                      alignSelf: isMine ? "flex-end" : "flex-start",
-                      backgroundColor: isMine
-                        ? theme.colors.primary
-                        : theme.colors.card,
-                      borderColor: isMine
-                        ? theme.colors.primary
-                        : theme.colors.border,
-                      borderWidth: isMine ? 0 : 1,
-                      borderRadius: 16,
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      marginBottom: 10,
-                      maxWidth: "80%",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: "Kyiv_400",
-                        color: isMine ? "#fff" : theme.colors.text,
-                      }}
-                    >
+              const isMine = item.senderId === user?.uid;
+
+              return (
+
+                <View
+                  key={item.id}
+                  style={{
+                    alignSelf: isMine ? "flex-end" : "flex-start",
+                    backgroundColor: isMine
+                      ? theme.colors.primary
+                      : theme.colors.card,
+                    borderRadius: 16,
+                    padding: 12,
+                    marginBottom: 10,
+                    maxWidth: "80%"
+                  }}
+                >
+
+                  {item.type === "text" && (
+
+                    <Text style={{
+                      color: isMine ? "#fff" : theme.colors.text,
+                      fontFamily: "Kyiv_400"
+                    }}>
                       {item.text}
                     </Text>
-                  </View>
-                );
-              })
-            )}
+
+                  )}
+
+                  {item.type === "booking" && (
+
+                    <View style={{
+                        backgroundColor: isMine ? theme.colors.primary : theme.colors.card,
+                        padding: 6,
+                        borderRadius: 10
+                      }}>
+
+                    <Text style={{
+                      fontFamily: "Kyiv_700",
+                      color: theme.colors.text
+                    }}>
+                      Booking Request
+                    </Text>
+
+                    <Text style={{
+                      fontFamily: "Kyiv_400",
+                      color: theme.colors.text
+                    }}>
+                      {item.bookingDate} • {item.bookingTime}
+                    </Text>
+
+                      {isProvider && item.bookingStatus === "pending" && (
+
+                        <View style={{
+                          flexDirection: "row",
+                          marginTop: 12
+                        }}>
+
+                        <Pressable
+                          onPress={() => acceptBooking(item)}
+                          style={{
+                            backgroundColor: "#2E7D32",
+                            paddingVertical: 8,
+                            paddingHorizontal: 16,
+                            borderRadius: 12,
+                            marginRight: 10
+                          }}
+                        >
+                          <Text style={{
+                            color: "#fff",
+                            fontFamily: "Kyiv_700"
+                          }}>
+                            Accept
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => declineBooking(item)}
+                          style={{
+                            backgroundColor: "#C62828",
+                            paddingVertical: 8,
+                            paddingHorizontal: 16,
+                            borderRadius: 12
+                          }}
+                        >
+                          <Text style={{
+                            color: "#fff",
+                            fontFamily: "Kyiv_700"
+                          }}>
+                            Decline
+                          </Text>
+                        </Pressable>
+
+                        </View>
+
+                      )}
+
+                      {item.bookingStatus === "accepted" && (
+                        <Text style={{
+                          color: "#2E7D32",
+                          fontFamily: "Kyiv_700",
+                          marginTop: 6
+                        }}>
+                          Booking Accepted
+                        </Text>
+                      )}
+
+                      {item.bookingStatus === "declined" && (
+                        <Text style={{
+                          color: "#C62828",
+                          fontFamily: "Kyiv_700",
+                          marginTop: 6
+                        }}>
+                          Booking Declined
+                        </Text>
+                      )}
+
+                    </View>
+
+                  )}
+
+                </View>
+
+              );
+
+            })}
+
           </ScrollView>
 
           {/* INPUT */}
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 16,
-              borderTopWidth: 1,
-              borderTopColor: theme.colors.border,
-              backgroundColor: theme.colors.bg,
-              gap: 10,
-            }}
-          >
+          <View style={{
+            flexDirection: "row",
+            padding: 16,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border
+          }}>
+
             <TextInput
               value={input}
               onChangeText={setInput}
@@ -318,38 +422,39 @@ export default function ChatScreen() {
               placeholderTextColor={theme.colors.placeholder}
               style={{
                 flex: 1,
-                backgroundColor: theme.colors.card,
-                color: theme.colors.text,
-                borderRadius: 16,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                fontFamily: "Kyiv_400",
                 borderWidth: 1,
                 borderColor: theme.colors.border,
+                borderRadius: 12,
+                padding: 10,
+                fontFamily: "Kyiv_400",
+                color: theme.colors.text
               }}
             />
 
             <Pressable
               onPress={sendMessage}
               style={{
+                marginLeft: 10,
                 backgroundColor: theme.colors.primary,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 14,
+                padding: 12,
+                borderRadius: 10
               }}
             >
-              <Text
-                style={{
-                  color: "#fff",
-                  fontFamily: "Kyiv_700",
-                }}
-              >
+              <Text style={{
+                color: "#fff",
+                fontFamily: "Kyiv_700"
+              }}>
                 Send
               </Text>
             </Pressable>
+
           </View>
+
         </>
       )}
+
     </KeyboardAvoidingView>
+
   );
+
 }

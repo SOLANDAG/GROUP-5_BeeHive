@@ -27,6 +27,65 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 
+const startConversation = async (service: any) => {
+
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+
+    const q = query(
+      collection(db, "conversations"),
+      where("customerId", "==", user.uid),
+      where("providerId", "==", service.providerId)
+    );
+
+    const snap = await getDocs(q);
+
+    let conversationId = "";
+
+    if (!snap.empty) {
+
+      conversationId = snap.docs[0].id;
+
+    } else {
+
+      const docRef = await addDoc(collection(db, "conversations"), {
+
+        customerId: user.uid,
+        providerId: service.providerId,
+        serviceId: service.id,
+
+        businessName: service.businessName,
+
+        participants: [
+          user.uid,
+          service.providerId
+        ],
+
+        lastMessage: "",
+        lastMessageAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+
+      });
+
+      conversationId = docRef.id;
+
+    }
+
+    router.push({
+      pathname: "/(app)/chat",
+      params: { conversationId }
+    });
+
+  } catch (err) {
+
+    console.log("Start conversation error:", err);
+
+  }
+
+};
+
 const { width } = Dimensions.get("window");
 
 const HEADER_MAX_HEIGHT = 220;
@@ -211,8 +270,7 @@ export default function Home() {
     try {
       const existingQuery = query(
         collection(db, "conversations"),
-        where("serviceId", "==", service.id),
-        where("customerId", "==", user.uid)
+        where("participants", "array-contains", user.uid)
       );
 
       const existingSnap = await getDocs(existingQuery);
@@ -263,6 +321,7 @@ export default function Home() {
       await addDoc(collection(db, "messages"), {
         conversationId: conversationRef.id,
         senderId: user.uid,
+        type: "text",
         text: `Hello! I want to inquire about ${service.businessName}.`,
         createdAt: serverTimestamp(),
       });
@@ -281,8 +340,8 @@ export default function Home() {
       router.push({
         pathname: "/(app)/chat",
         params: {
-          conversationId: conversationRef.id,
-          bookingId: bookingRef.id,
+          conversationId: String(conversationRef.id),
+          bookingId: String(bookingRef.id),
         },
       });
     } catch (e) {
@@ -506,10 +565,9 @@ export default function Home() {
                 {item.startTime} - {item.endTime}
               </Text>
 
-              <Pressable
-                onPress={() => {
-                  if (!loadingChat) handleMessage(item);
-                }}
+            <Pressable
+              disabled={loadingChat}
+              onPress={() => handleMessage(item)}
                 style={{
                   marginTop: 14,
                   backgroundColor: theme.colors.primary,
@@ -524,7 +582,18 @@ export default function Home() {
                     color: "#fff",
                   }}
                 >
-                  Message & Book
+                  {loadingChat ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: "Kyiv_700",
+                      color: "#fff",
+                    }}
+                  >
+                    Message & Book
+                  </Text>
+                )}
                 </Text>
               </Pressable>
             </View>
