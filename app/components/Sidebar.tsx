@@ -19,7 +19,7 @@ import { signOut } from "firebase/auth";
 
 import { PanGestureHandler } from "react-native-gesture-handler";
 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 const { width } = Dimensions.get("window");
 const SIDEBAR_WIDTH = width * 0.8;
@@ -36,31 +36,19 @@ export default function Sidebar() {
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      const user = auth.currentUser;
+    const user = auth.currentUser;
+    if (!user) return;
 
-      if (!user) return;
+    const unsubscribe = onSnapshot(doc(db, "users", user.uid), (snap) => {
+      if (!snap.exists()) return;
 
-      try {
-        const snap = await getDoc(doc(db, "users", user.uid));
+      const data = snap.data();
 
-        if (!snap.exists()) return;
+      setIsAdmin(data.admin === true);
+      setIsProvider(data.providerStatus === "approved");
+    });
 
-        const data = snap.data();
-
-        if (data.admin === true) {
-          setIsAdmin(true);
-        }
-        if (data.providerStatus === "approved") {
-          setIsProvider(true);
-        }
-
-      } catch (error) {
-        console.log("Sidebar admin check error:", error);
-      }
-    };
-
-    checkAdmin();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {

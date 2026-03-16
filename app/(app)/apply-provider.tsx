@@ -85,13 +85,8 @@ export default function ApplyProviderScreen() {
               : ""
           );
           setAvailableDays(data.availableDays || []);
-
-          if (data.startTime) {
-            // keep display from Firestore; picker still starts on current time
-          }
-          if (data.endTime) {
-            // same
-          }
+        } else {
+          setStatus(null);
         }
       } catch (error) {
         console.log("Load provider application error:", error);
@@ -125,7 +120,16 @@ export default function ApplyProviderScreen() {
     }
 
     try {
+      const userSnap = await getDoc(doc(db, "users", user.uid));
       const existing = await getDoc(doc(db, "providerApplications", user.uid));
+
+      const userData = userSnap.exists() ? userSnap.data() : {};
+      const currentProviderStatus = userData?.providerStatus || "none";
+
+      if (currentProviderStatus === "approved") {
+        Alert.alert("You are already an approved provider.");
+        return;
+      }
 
       if (existing.exists()) {
         const data = existing.data();
@@ -135,12 +139,7 @@ export default function ApplyProviderScreen() {
           return;
         }
 
-        if (data.status === "pending") {
-          Alert.alert("Your application is already pending review.");
-          return;
-        }
-
-        // allow resubmission if rejected
+        // If pending, allow editing and updating
       }
 
       await setDoc(
@@ -173,7 +172,12 @@ export default function ApplyProviderScreen() {
       );
 
       setStatus("pending");
-      Alert.alert("Application submitted.");
+
+      Alert.alert(
+        existing.exists()
+          ? "Application updated successfully."
+          : "Application submitted."
+      );
     } catch (error) {
       console.log("Application submit error:", error);
       Alert.alert("Failed to submit application.");
@@ -312,7 +316,6 @@ export default function ApplyProviderScreen() {
         keyboardType="numeric"
         placeholderTextColor={theme.colors.placeholder}
         returnKeyType="done"
-        // remove auto submit to prevent accidental submission
         style={{
           backgroundColor: theme.colors.card,
           padding: 14,

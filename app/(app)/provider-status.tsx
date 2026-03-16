@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { router } from "expo-router";
 
 export default function ProviderStatus() {
   const { theme } = useTheme();
@@ -48,8 +49,10 @@ export default function ProviderStatus() {
         {
           text: "Yes",
           onPress: async () => {
+  try {
 
             await deleteDoc(doc(db, "services", user.uid));
+            await deleteDoc(doc(db, "providerApplications", user.uid));
 
             await updateDoc(doc(db, "users", user.uid), {
             "roles.provider": false,
@@ -58,12 +61,25 @@ export default function ProviderStatus() {
             isActive: false
             });
 
-            Alert.alert("You are no longer a provider.");
-          }
+          Alert.alert("You are no longer a provider.", "", [
+            {
+              text: "OK",
+              onPress: () => {
+                router.replace("/(app)/home");
+              }
+            }
+          ]);
+            } catch (error) {
+    Alert.alert("Error", "Failed to cancel provider status.");
+  }
+}
+          
         }
+        
       ]
     );
   };
+  
 
   return (
     <View
